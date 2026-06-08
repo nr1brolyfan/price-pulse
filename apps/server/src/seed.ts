@@ -89,6 +89,82 @@ export const seedProducts: ReadonlyArray<Product> = [
     ],
     updatedAt: checkedAt,
   },
+  {
+    id: "iphone-15-pro",
+    name: "iPhone 15 Pro 128 GB",
+    category: "Smartfony",
+    imageUrl:
+      "https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=900&auto=format&fit=crop",
+    currentPrice: { amount: 4599, currency: "PLN" },
+    lowestPrice: { amount: 4499, currency: "PLN" },
+    offers: [
+      {
+        id: "offer-iphone-ispot",
+        storeName: "iSpot",
+        url: "https://example.com/iphone-15-pro-ispot",
+        lastPrice: { amount: 4699, currency: "PLN" },
+        lastCheckedAt: checkedAt,
+      },
+      {
+        id: "offer-iphone-mediaexpert",
+        storeName: "Media Expert",
+        url: "https://example.com/iphone-15-pro-mediaexpert",
+        lastPrice: { amount: 4599, currency: "PLN" },
+        lastCheckedAt: checkedAt,
+      },
+      {
+        id: "offer-iphone-allegro",
+        storeName: "Allegro",
+        url: "https://example.com/iphone-15-pro-allegro",
+        lastPrice: { amount: 4649, currency: "PLN" },
+        lastCheckedAt: checkedAt,
+      },
+    ],
+    history: [
+      { amount: 4999, currency: "PLN", checkedAt: "2026-06-01T09:00:00.000Z" },
+      { amount: 4799, currency: "PLN", checkedAt: "2026-06-04T09:00:00.000Z" },
+      { amount: 4599, currency: "PLN", checkedAt },
+    ],
+    updatedAt: checkedAt,
+  },
+  {
+    id: "lg-oled-c3-55",
+    name: "LG OLED C3 55 cali",
+    category: "Telewizory",
+    imageUrl:
+      "https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=900&auto=format&fit=crop",
+    currentPrice: { amount: 5299, currency: "PLN" },
+    lowestPrice: { amount: 5199, currency: "PLN" },
+    offers: [
+      {
+        id: "offer-lg-rtveuroagd",
+        storeName: "RTV Euro AGD",
+        url: "https://example.com/lg-oled-c3-rtveuroagd",
+        lastPrice: { amount: 5399, currency: "PLN" },
+        lastCheckedAt: checkedAt,
+      },
+      {
+        id: "offer-lg-mediaexpert",
+        storeName: "Media Expert",
+        url: "https://example.com/lg-oled-c3-mediaexpert",
+        lastPrice: { amount: 5299, currency: "PLN" },
+        lastCheckedAt: checkedAt,
+      },
+      {
+        id: "offer-lg-neonet",
+        storeName: "Neonet",
+        url: "https://example.com/lg-oled-c3-neonet",
+        lastPrice: { amount: 5449, currency: "PLN" },
+        lastCheckedAt: checkedAt,
+      },
+    ],
+    history: [
+      { amount: 5799, currency: "PLN", checkedAt: "2026-06-01T09:00:00.000Z" },
+      { amount: 5499, currency: "PLN", checkedAt: "2026-06-04T09:00:00.000Z" },
+      { amount: 5299, currency: "PLN", checkedAt },
+    ],
+    updatedAt: checkedAt,
+  },
 ];
 
 export const seedAlerts: ReadonlyArray<Alert> = [
