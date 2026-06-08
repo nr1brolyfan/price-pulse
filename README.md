@@ -34,7 +34,8 @@ Full project documentation in Polish is available in [`docs/DOKUMENTACJA.md`](./
 - TanStack Query
 - Vite
 - Tailwind CSS
-- Drizzle schema package for future persistence
+- Drizzle ORM 1 RC with Effect-native PostgreSQL support
+- PostgreSQL in Docker Compose
 - Oxlint and Oxfmt
 
 ## Project Structure
@@ -46,7 +47,7 @@ price-monitor/
 │   └── web/         # React + TanStack Start frontend
 ├── packages/
 │   ├── api/         # Shared Effect Schema + HttpApi contract
-│   ├── db/          # Drizzle schema
+│   ├── db/          # Drizzle ORM schema and Dockerized PostgreSQL
 │   └── ui/          # Shared UI primitives and styles
 └── docs/            # Full project documentation and screenshots
 ```
@@ -59,10 +60,22 @@ Install dependencies:
 pnpm install
 ```
 
-Run the frontend and backend together:
+Run Dockerized PostgreSQL, push the Drizzle schema, and start the frontend and backend:
 
 ```bash
 pnpm dev
+```
+
+Start only the database:
+
+```bash
+pnpm docker
+```
+
+Push the Drizzle schema manually:
+
+```bash
+pnpm db:push
 ```
 
 Run only the backend:
@@ -70,6 +83,8 @@ Run only the backend:
 ```bash
 pnpm dev:server
 ```
+
+This requires PostgreSQL to be running and the schema to be pushed already.
 
 Run only the frontend:
 
@@ -124,4 +139,6 @@ pnpm build
 
 ## Data
 
-The current demo version uses seeded in-memory state. The repository includes a Drizzle database schema in `packages/db`, but runtime persistence is not enabled in this version.
+Runtime data is stored in PostgreSQL. The backend uses Drizzle ORM 1 RC through the Effect-native PostgreSQL driver from `@effect/sql-pg`.
+
+On first startup, the backend seeds products, offers, price history, alerts, and events when the `products` table is empty. Price updates, alert creation/deletion, triggered alerts, and system events are persisted in the database.

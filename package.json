@@ -7,7 +7,8 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "pnpm --parallel --stream --filter server --filter web dev",
+    "dev": "pnpm db:start && pnpm db:push && pnpm --parallel --stream --filter server --filter web dev",
+    "dev:apps": "pnpm --parallel --stream --filter server --filter web dev",
     "build": "pnpm -r build",
     "check-types": "pnpm -r check-types",
     "dev:web": "pnpm --filter web dev",
@@ -20,6 +21,7 @@
     "db:watch": "pnpm --filter @price-monitor/db db:watch",
     "db:stop": "pnpm --filter @price-monitor/db db:stop",
     "db:down": "pnpm --filter @price-monitor/db db:down",
+    "docker": "pnpm db:start",
     "check": "oxlint && oxfmt --write"
   },
   "dependencies": {},

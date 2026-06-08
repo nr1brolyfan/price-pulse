@@ -1,21 +1,19 @@
 import {
   AlertNotFound,
-  ProductNotFound,
   type Alert,
   type Dashboard,
   type DomainEvent,
   type Health,
+  ProductNotFound,
   type Product,
 } from "@price-monitor/api";
-import { Context, Effect, Layer, Ref } from "effect";
+import { Database, DatabaseLive, schema } from "@price-monitor/db";
+import { and, eq, gte, isNull } from "drizzle-orm";
+import { Context, Effect, Layer } from "effect";
 import { randomUUID } from "node:crypto";
 
+import { serverConfig } from "./config";
 import { seedAlerts, seedEvents, seedProducts } from "./seed";
-
-const toMoney = (amount: number) => ({
-  amount: Number(amount.toFixed(2)),
-  currency: "PLN" as const,
-});
 
 const maxHistoryPoints = 80;
 const priceDriftInterval = "3 seconds";
@@ -26,13 +24,134 @@ const makeId = (prefix: string) => `${prefix}-${randomUUID()}`;
 
 const randomDriftMultiplier = () => 1 + (Math.random() - 0.52) * 0.03;
 
-class PriceState extends Context.Service<
-  PriceState,
-  {
-    readonly alerts: Ref.Ref<ReadonlyArray<Alert>>;
-    readonly products: Ref.Ref<ReadonlyArray<Product>>;
-  }
->()("price-monitor/PriceState") {}
+const toCurrency = (_currency: string): "PLN" => "PLN";
+
+const toMoney = (amount: number, currency = "PLN"): Product["currentPrice"] => ({
+  amount: Number(Number(amount).toFixed(2)),
+  currency: toCurrency(currency),
+});
+
+const toDate = (value: string) => new Date(value);
+
+const toIso = (value: Date | string) => new Date(value).toISOString();
+
+type AlertRow = typeof schema.alerts.$inferSelect;
+type DomainEventRow = typeof schema.domainEvents.$inferSelect;
+type PriceHistoryRow = typeof schema.priceHistory.$inferSelect;
+type ProductRow = typeof schema.products.$inferSelect;
+type StoreOfferRow = typeof schema.storeOffers.$inferSelect;
+
+type ProductWithRelations = ProductRow & {
+  readonly history: ReadonlyArray<PriceHistoryRow>;
+  readonly offers: ReadonlyArray<StoreOfferRow>;
+};
+
+const rowToAlert = (row: AlertRow): Alert => ({
+  id: row.id,
+  productId: row.productId,
+  targetPrice: toMoney(row.targetPrice, row.currency),
+  enabled: row.enabled,
+  createdAt: toIso(row.createdAt),
+  ...(row.triggeredAt ? { triggeredAt: toIso(row.triggeredAt) } : {}),
+});
+
+const rowToEvent = (row: DomainEventRow): DomainEvent => ({
+  id: row.id,
+  type: row.type as DomainEvent["type"],
+  productId: row.productId,
+  message: row.message,
+  createdAt: toIso(row.createdAt),
+});
+
+const rowToOffer = (row: StoreOfferRow): Product["offers"][number] => ({
+  id: row.id,
+  storeName: row.storeName,
+  url: row.url,
+  lastPrice: toMoney(row.lastPrice, row.currency),
+  lastCheckedAt: toIso(row.lastCheckedAt),
+});
+
+const rowToHistory = (row: PriceHistoryRow): Product["history"][number] => ({
+  amount: row.amount,
+  currency: toCurrency(row.currency),
+  checkedAt: toIso(row.checkedAt),
+});
+
+const rowToProduct = (row: ProductWithRelations): Product => ({
+  id: row.id,
+  name: row.name,
+  category: row.category,
+  imageUrl: row.imageUrl,
+  currentPrice: toMoney(row.currentPrice, row.currency),
+  lowestPrice: toMoney(row.lowestPrice, row.currency),
+  offers: [...row.offers].sort((left, right) => left.lastPrice - right.lastPrice).map(rowToOffer),
+  history: [...row.history]
+    .sort((left, right) => left.checkedAt.getTime() - right.checkedAt.getTime())
+    .slice(-maxHistoryPoints)
+    .map(rowToHistory),
+  updatedAt: toIso(row.updatedAt),
+});
+
+const productToRow = (product: Product): typeof schema.products.$inferInsert => ({
+  id: product.id,
+  name: product.name,
+  category: product.category,
+  imageUrl: product.imageUrl,
+  currentPrice: product.currentPrice.amount,
+  lowestPrice: product.lowestPrice.amount,
+  currency: product.currentPrice.currency,
+  updatedAt: toDate(product.updatedAt),
+});
+
+const offerToRow = (
+  offer: Product["offers"][number],
+  productId: string,
+): typeof schema.storeOffers.$inferInsert => ({
+  id: offer.id,
+  productId,
+  storeName: offer.storeName,
+  url: offer.url,
+  lastPrice: offer.lastPrice.amount,
+  currency: offer.lastPrice.currency,
+  lastCheckedAt: toDate(offer.lastCheckedAt),
+});
+
+const historyToRow = (
+  point: Product["history"][number],
+  productId: string,
+  index: number,
+): typeof schema.priceHistory.$inferInsert => ({
+  id: `history-${productId}-${index}`,
+  productId,
+  amount: point.amount,
+  currency: point.currency,
+  checkedAt: toDate(point.checkedAt),
+});
+
+const alertToRow = (alert: Alert): typeof schema.alerts.$inferInsert => ({
+  id: alert.id,
+  productId: alert.productId,
+  targetPrice: alert.targetPrice.amount,
+  currency: alert.targetPrice.currency,
+  enabled: alert.enabled,
+  triggeredAt: alert.triggeredAt ? toDate(alert.triggeredAt) : null,
+  createdAt: toDate(alert.createdAt),
+});
+
+const eventToRow = (event: DomainEvent): typeof schema.domainEvents.$inferInsert => ({
+  id: event.id,
+  productId: event.productId,
+  type: event.type,
+  message: event.message,
+  payload: {},
+  createdAt: toDate(event.createdAt),
+});
+
+const makeEvent = (event: Omit<DomainEvent, "createdAt" | "id">): DomainEvent => ({
+  ...event,
+  id: makeId("event"),
+  createdAt: nowIso(),
+});
 
 export class EventBus extends Context.Service<
   EventBus,
@@ -71,37 +190,6 @@ export class PriceMonitor extends Context.Service<
   }
 >()("price-monitor/PriceMonitor") {}
 
-const PriceStateLive = Layer.effect(
-  PriceState,
-  Effect.gen(function* () {
-    const alerts = yield* Ref.make(seedAlerts);
-    const products = yield* Ref.make(seedProducts);
-
-    return { alerts, products };
-  }),
-);
-
-const EventBusLive = Layer.effect(
-  EventBus,
-  Effect.gen(function* () {
-    const events = yield* Ref.make(seedEvents);
-
-    return {
-      list: Ref.get(events),
-      publish: (event) =>
-        Ref.modify(events, (current) => {
-          const domainEvent: DomainEvent = {
-            ...event,
-            id: makeId("event"),
-            createdAt: nowIso(),
-          };
-
-          return [domainEvent, [domainEvent, ...current].slice(0, 40)] as const;
-        }),
-    };
-  }),
-);
-
 const PriceProviderLive = Layer.succeed(PriceProvider, {
   nextOffersFor: (product, checkedAt) =>
     Effect.sync(() =>
@@ -113,21 +201,124 @@ const PriceProviderLive = Layer.succeed(PriceProvider, {
     ),
 });
 
+const EventBusLive = Layer.effect(
+  EventBus,
+  Effect.gen(function* () {
+    const { db } = yield* Database;
+
+    const list = Effect.gen(function* () {
+      const rows = yield* db.query.domainEvents
+        .findMany({
+          limit: 40,
+          orderBy: { createdAt: "desc" },
+        })
+        .pipe(Effect.orDie);
+
+      return rows.map(rowToEvent);
+    });
+
+    return {
+      list,
+      publish: (event) =>
+        Effect.gen(function* () {
+          const domainEvent = makeEvent(event);
+
+          yield* db.insert(schema.domainEvents).values(eventToRow(domainEvent)).pipe(Effect.orDie);
+
+          return domainEvent;
+        }),
+    };
+  }),
+);
+
 const PriceMonitorLive = Layer.effect(
   PriceMonitor,
   Effect.gen(function* () {
+    const { db } = yield* Database;
     const eventBus = yield* EventBus;
     const priceProvider = yield* PriceProvider;
-    const state = yield* PriceState;
 
-    const listProducts = Ref.get(state.products);
-    const listAlerts = Ref.get(state.alerts);
-    const listEvents = eventBus.list;
+    const seedDatabase = Effect.gen(function* () {
+      const existingProducts = yield* db
+        .select({ id: schema.products.id })
+        .from(schema.products)
+        .limit(1)
+        .pipe(Effect.orDie);
+
+      if (existingProducts.length > 0) {
+        return;
+      }
+
+      const productRows = seedProducts.map(productToRow);
+      const offerRows = seedProducts.flatMap((product) =>
+        product.offers.map((offer) => offerToRow(offer, product.id)),
+      );
+      const historyRows = seedProducts.flatMap((product) =>
+        product.history.map((point, index) => historyToRow(point, product.id, index)),
+      );
+      const alertRows = seedAlerts.map(alertToRow);
+      const eventRows = seedEvents.map(eventToRow);
+
+      yield* db
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            yield* tx.insert(schema.products).values(productRows);
+
+            if (offerRows.length > 0) {
+              yield* tx.insert(schema.storeOffers).values(offerRows);
+            }
+
+            if (historyRows.length > 0) {
+              yield* tx.insert(schema.priceHistory).values(historyRows);
+            }
+
+            if (alertRows.length > 0) {
+              yield* tx.insert(schema.alerts).values(alertRows);
+            }
+
+            if (eventRows.length > 0) {
+              yield* tx.insert(schema.domainEvents).values(eventRows);
+            }
+          }),
+        )
+        .pipe(Effect.orDie);
+    });
+
+    const listProducts = Effect.gen(function* () {
+      const rows = yield* db.query.products
+        .findMany({
+          orderBy: { name: "asc" },
+          with: {
+            history: {
+              limit: maxHistoryPoints,
+              orderBy: { checkedAt: "desc" },
+            },
+            offers: {
+              orderBy: { lastPrice: "asc" },
+            },
+          },
+        })
+        .pipe(Effect.orDie);
+
+      return rows.map((row) => rowToProduct(row));
+    });
 
     const getProduct = (productId: string) =>
       Effect.gen(function* () {
-        const products = yield* Ref.get(state.products);
-        const product = products.find((item) => item.id === productId);
+        const product = yield* db.query.products
+          .findFirst({
+            where: { id: productId },
+            with: {
+              history: {
+                limit: maxHistoryPoints,
+                orderBy: { checkedAt: "desc" },
+              },
+              offers: {
+                orderBy: { lastPrice: "asc" },
+              },
+            },
+          })
+          .pipe(Effect.orDie);
 
         if (!product) {
           return yield* new ProductNotFound({
@@ -136,8 +327,20 @@ const PriceMonitorLive = Layer.effect(
           });
         }
 
-        return product;
+        return rowToProduct(product);
       });
+
+    const listAlerts = Effect.gen(function* () {
+      const rows = yield* db.query.alerts
+        .findMany({
+          orderBy: { createdAt: "desc" },
+        })
+        .pipe(Effect.orDie);
+
+      return rows.map(rowToAlert);
+    });
+
+    const listEvents = eventBus.list;
 
     const bestPriceFromOffers = (product: Product, offers: Product["offers"]) =>
       offers.reduce<Product["currentPrice"]>(
@@ -145,41 +348,86 @@ const PriceMonitorLive = Layer.effect(
         offers[0]?.lastPrice ?? product.currentPrice,
       );
 
-    const triggerAlertsFor = (product: Product, triggeredAt: string) =>
-      Effect.gen(function* () {
-        const triggeredAlerts = yield* Ref.modify(state.alerts, (alerts) => {
-          const triggered: Array<Alert> = [];
-          const nextAlerts = alerts.map((alert) => {
-            if (
-              alert.productId !== product.id ||
-              !alert.enabled ||
-              alert.triggeredAt ||
-              product.currentPrice.amount > alert.targetPrice.amount
-            ) {
-              return alert;
+    const persistMarketSnapshot = (change: {
+      readonly checkedAt: string;
+      readonly priceChanged: boolean;
+      readonly priceDropped: boolean;
+      readonly product: Product;
+    }) =>
+      db
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            yield* tx
+              .update(schema.products)
+              .set({
+                currentPrice: change.product.currentPrice.amount,
+                lowestPrice: change.product.lowestPrice.amount,
+                updatedAt: toDate(change.checkedAt),
+              })
+              .where(eq(schema.products.id, change.product.id));
+
+            yield* Effect.forEach(change.product.offers, (offer) =>
+              tx
+                .update(schema.storeOffers)
+                .set({
+                  lastPrice: offer.lastPrice.amount,
+                  lastCheckedAt: toDate(offer.lastCheckedAt),
+                })
+                .where(eq(schema.storeOffers.id, offer.id)),
+            );
+
+            if (!change.priceChanged) {
+              return;
             }
 
-            const nextAlert = { ...alert, triggeredAt };
-            triggered.push(nextAlert);
-            return nextAlert;
-          });
+            yield* tx.insert(schema.priceHistory).values({
+              id: makeId("history"),
+              productId: change.product.id,
+              amount: change.product.currentPrice.amount,
+              currency: change.product.currentPrice.currency,
+              checkedAt: toDate(change.checkedAt),
+            });
 
-          return [triggered, nextAlerts] as const;
-        });
+            const priceEvent = makeEvent({
+              type: change.priceDropped ? "PriceDropped" : "PriceUpdated",
+              productId: change.product.id,
+              message: change.priceDropped
+                ? `Cena ${change.product.name} spadła do ${change.product.currentPrice.amount} PLN.`
+                : `Cena ${change.product.name} zmieniła się do ${change.product.currentPrice.amount} PLN.`,
+            });
 
-        yield* Effect.forEach(triggeredAlerts, (alert) =>
-          eventBus.publish({
-            type: "AlertTriggered",
-            productId: product.id,
-            message: `Alert ${alert.targetPrice.amount} PLN dla ${product.name} został uruchomiony.`,
+            yield* tx.insert(schema.domainEvents).values(eventToRow(priceEvent));
+
+            const triggeredAlerts = yield* tx
+              .update(schema.alerts)
+              .set({ triggeredAt: toDate(change.checkedAt) })
+              .where(
+                and(
+                  eq(schema.alerts.productId, change.product.id),
+                  eq(schema.alerts.enabled, true),
+                  isNull(schema.alerts.triggeredAt),
+                  gte(schema.alerts.targetPrice, change.product.currentPrice.amount),
+                ),
+              )
+              .returning();
+
+            yield* Effect.forEach(triggeredAlerts, (alert) =>
+              tx.insert(schema.domainEvents).values(
+                eventToRow(
+                  makeEvent({
+                    type: "AlertTriggered",
+                    productId: change.product.id,
+                    message: `Alert ${alert.targetPrice} PLN dla ${change.product.name} został uruchomiony.`,
+                  }),
+                ),
+              ),
+            );
           }),
-        );
-
-        return triggeredAlerts;
-      });
+        )
+        .pipe(Effect.orDie);
 
     const updateMarketPrices = Effect.gen(function* () {
-      const products = yield* Ref.get(state.products);
+      const products = yield* listProducts;
       const checkedAt = nowIso();
 
       const changes = yield* Effect.forEach(products, (product) =>
@@ -201,32 +449,13 @@ const PriceMonitorLive = Layer.effect(
             updatedAt: checkedAt,
           };
 
-          return { priceChanged, priceDropped, product: updatedProduct };
+          return { checkedAt, priceChanged, priceDropped, product: updatedProduct };
         }),
       );
 
-      const updatedProducts = changes.map((change) => change.product);
+      yield* Effect.forEach(changes, persistMarketSnapshot);
 
-      yield* Ref.set(state.products, updatedProducts);
-
-      yield* Effect.forEach(
-        changes.filter((change) => change.priceChanged),
-        (change) =>
-          eventBus.publish({
-            type: change.priceDropped ? "PriceDropped" : "PriceUpdated",
-            productId: change.product.id,
-            message: change.priceDropped
-              ? `Cena ${change.product.name} spadła do ${change.product.currentPrice.amount} PLN.`
-              : `Cena ${change.product.name} zmieniła się do ${change.product.currentPrice.amount} PLN.`,
-          }),
-      );
-
-      yield* Effect.forEach(
-        changes.filter((change) => change.priceChanged),
-        (change) => triggerAlertsFor(change.product, checkedAt),
-      );
-
-      return updatedProducts;
+      return yield* listProducts;
     });
 
     const checkPrice = (productId: string) =>
@@ -259,7 +488,7 @@ const PriceMonitorLive = Layer.effect(
             ...(shouldTrigger ? { triggeredAt: createdAt } : {}),
           };
 
-          yield* Ref.update(state.alerts, (alerts) => [alert, ...alerts]);
+          yield* db.insert(schema.alerts).values(alertToRow(alert)).pipe(Effect.orDie);
 
           if (shouldTrigger) {
             yield* eventBus.publish({
@@ -280,15 +509,12 @@ const PriceMonitorLive = Layer.effect(
       }),
       deleteAlert: (alertId: string) =>
         Effect.gen(function* () {
-          const deletedAlert = yield* Ref.modify(state.alerts, (alerts) => {
-            const alert = alerts.find((item) => item.id === alertId);
-
-            if (!alert) {
-              return [undefined, alerts] as const;
-            }
-
-            return [alert, alerts.filter((item) => item.id !== alertId)] as const;
-          });
+          const deletedRows = yield* db
+            .delete(schema.alerts)
+            .where(eq(schema.alerts.id, alertId))
+            .returning()
+            .pipe(Effect.orDie);
+          const deletedAlert = deletedRows[0];
 
           if (!deletedAlert) {
             return yield* new AlertNotFound({
@@ -297,7 +523,7 @@ const PriceMonitorLive = Layer.effect(
             });
           }
 
-          return deletedAlert;
+          return rowToAlert(deletedAlert);
         }),
       getProduct,
       health: Effect.sync(() => ({
@@ -311,6 +537,8 @@ const PriceMonitorLive = Layer.effect(
       updateMarketPrices,
     };
 
+    yield* seedDatabase;
+
     yield* Effect.gen(function* () {
       while (true) {
         yield* Effect.sleep(priceDriftInterval);
@@ -320,6 +548,13 @@ const PriceMonitorLive = Layer.effect(
 
     return monitor;
   }),
-).pipe(Layer.provide(Layer.mergeAll(PriceStateLive, EventBusLive, PriceProviderLive)));
+);
 
-export const ServicesLive = PriceMonitorLive;
+const DatabaseLayer = DatabaseLive({ databaseUrl: serverConfig.databaseUrl });
+
+const InfrastructureLive = EventBusLive.pipe(
+  Layer.provideMerge(DatabaseLayer),
+  Layer.merge(PriceProviderLive),
+);
+
+export const ServicesLive = PriceMonitorLive.pipe(Layer.provide(InfrastructureLive));

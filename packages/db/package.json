@@ -15,20 +15,20 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "db:migrate": "drizzle-kit migrate",
-    "db:start": "docker compose up -d",
+    "db:start": "docker compose up -d --wait",
     "db:watch": "docker compose up",
     "db:stop": "docker compose stop",
     "db:down": "docker compose down"
   },
   "dependencies": {
+    "@effect/sql-pg": "4.0.0-beta.78",
     "dotenv": "catalog:",
-    "drizzle-orm": "^0.45.1",
-    "pg": "^8.17.1"
+    "drizzle-orm": "1.0.0-rc.3",
+    "effect": "4.0.0-beta.78"
   },
   "devDependencies": {
     "@price-monitor/config": "workspace:*",
-    "@types/pg": "^8.16.0",
-    "drizzle-kit": "^0.31.8",
+    "drizzle-kit": "1.0.0-rc.3",
     "typescript": "catalog:"
   }
 }

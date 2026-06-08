@@ -1,13 +1,15 @@
-import { relations } from "drizzle-orm";
+import { defineRelations } from "drizzle-orm/relations";
 import { boolean, integer, jsonb, numeric, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+
+const money = (name: string) => numeric(name, { precision: 12, scale: 2, mode: "number" });
 
 export const products = pgTable("products", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   category: text("category").notNull(),
   imageUrl: text("image_url").notNull(),
-  currentPrice: numeric("current_price", { precision: 12, scale: 2 }).notNull(),
-  lowestPrice: numeric("lowest_price", { precision: 12, scale: 2 }).notNull(),
+  currentPrice: money("current_price").notNull(),
+  lowestPrice: money("lowest_price").notNull(),
   currency: text("currency").notNull().default("PLN"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -19,7 +21,7 @@ export const storeOffers = pgTable("store_offers", {
     .references(() => products.id, { onDelete: "cascade" }),
   storeName: text("store_name").notNull(),
   url: text("url").notNull(),
-  lastPrice: numeric("last_price", { precision: 12, scale: 2 }).notNull(),
+  lastPrice: money("last_price").notNull(),
   currency: text("currency").notNull().default("PLN"),
   lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -29,7 +31,7 @@ export const priceHistory = pgTable("price_history", {
   productId: text("product_id")
     .notNull()
     .references(() => products.id, { onDelete: "cascade" }),
-  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  amount: money("amount").notNull(),
   currency: text("currency").notNull().default("PLN"),
   checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -39,7 +41,7 @@ export const alerts = pgTable("alerts", {
   productId: text("product_id")
     .notNull()
     .references(() => products.id, { onDelete: "cascade" }),
-  targetPrice: numeric("target_price", { precision: 12, scale: 2 }).notNull(),
+  targetPrice: money("target_price").notNull(),
   currency: text("currency").notNull().default("PLN"),
   enabled: boolean("enabled").notNull().default(true),
   triggeredAt: timestamp("triggered_at", { withTimezone: true }),
@@ -68,45 +70,74 @@ export const priceCheckJobs = pgTable("price_check_jobs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const productsRelations = relations(products, ({ many }) => ({
-  alerts: many(alerts),
-  events: many(domainEvents),
-  history: many(priceHistory),
-  offers: many(storeOffers),
-  priceCheckJobs: many(priceCheckJobs),
-}));
+export const schema = {
+  alerts,
+  domainEvents,
+  priceCheckJobs,
+  priceHistory,
+  products,
+  storeOffers,
+};
 
-export const storeOffersRelations = relations(storeOffers, ({ one }) => ({
-  product: one(products, {
-    fields: [storeOffers.productId],
-    references: [products.id],
+export const relations = defineRelations(
+  schema,
+  ({ alerts, domainEvents, many, one, priceCheckJobs, priceHistory, products, storeOffers }) => ({
+    alerts: {
+      product: one.products({
+        from: alerts.productId,
+        to: products.id,
+        optional: false,
+      }),
+    },
+    domainEvents: {
+      product: one.products({
+        from: domainEvents.productId,
+        to: products.id,
+        optional: false,
+      }),
+    },
+    priceCheckJobs: {
+      product: one.products({
+        from: priceCheckJobs.productId,
+        to: products.id,
+        optional: false,
+      }),
+    },
+    priceHistory: {
+      product: one.products({
+        from: priceHistory.productId,
+        to: products.id,
+        optional: false,
+      }),
+    },
+    products: {
+      alerts: many.alerts({
+        from: products.id,
+        to: alerts.productId,
+      }),
+      events: many.domainEvents({
+        from: products.id,
+        to: domainEvents.productId,
+      }),
+      history: many.priceHistory({
+        from: products.id,
+        to: priceHistory.productId,
+      }),
+      offers: many.storeOffers({
+        from: products.id,
+        to: storeOffers.productId,
+      }),
+      priceCheckJobs: many.priceCheckJobs({
+        from: products.id,
+        to: priceCheckJobs.productId,
+      }),
+    },
+    storeOffers: {
+      product: one.products({
+        from: storeOffers.productId,
+        to: products.id,
+        optional: false,
+      }),
+    },
   }),
-}));
-
-export const priceHistoryRelations = relations(priceHistory, ({ one }) => ({
-  product: one(products, {
-    fields: [priceHistory.productId],
-    references: [products.id],
-  }),
-}));
-
-export const alertsRelations = relations(alerts, ({ one }) => ({
-  product: one(products, {
-    fields: [alerts.productId],
-    references: [products.id],
-  }),
-}));
-
-export const domainEventsRelations = relations(domainEvents, ({ one }) => ({
-  product: one(products, {
-    fields: [domainEvents.productId],
-    references: [products.id],
-  }),
-}));
-
-export const priceCheckJobsRelations = relations(priceCheckJobs, ({ one }) => ({
-  product: one(products, {
-    fields: [priceCheckJobs.productId],
-    references: [products.id],
-  }),
-}));
+);

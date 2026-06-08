@@ -14,6 +14,7 @@
     "@price-monitor/api": "workspace:*",
     "@price-monitor/db": "workspace:*",
     "dotenv": "catalog:",
+    "drizzle-orm": "1.0.0-rc.3",
     "effect": "4.0.0-beta.78"
   },
   "devDependencies": {

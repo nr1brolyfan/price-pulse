@@ -185,13 +185,13 @@ Mechanizm działania:
 - system wybiera najtańszą ofertę jako aktualną cenę produktu,
 - jeśli cena się zmieniła, dodawany jest punkt historii ceny,
 - jeśli cena spadła poniżej progu alertu, alert zostaje uruchomiony,
-- zdarzenia są publikowane do EventBus.
+- zdarzenia są zapisywane w PostgreSQL i publikowane przez EventBus.
 
 Frontend odświeża dashboard przez TanStack Query co 1 sekundę. Dzięki temu użytkownik widzi zmiany ceny, wykresu i alertów bez ręcznego odświeżania strony.
 
 ## 4. Dane demonstracyjne
 
-Aplikacja startuje z danymi seedowymi w pamięci.
+Aplikacja startuje z danymi seedowymi zapisanymi w PostgreSQL. Seedowanie wykonuje się przy starcie backendu, jeśli tabela `products` jest pusta.
 
 Produkty seedowe:
 
@@ -217,7 +217,7 @@ Główne części:
 | Backend      | `apps/server`  | Effect HTTP API, serwisy, background monitoring      |
 | Kontrakt API | `packages/api` | Wspólne typy, Effect Schema, HttpApi                 |
 | UI           | `packages/ui`  | Wspólne komponenty shadcn/Base UI                    |
-| DB schema    | `packages/db`  | Schemat Drizzle dla przyszłej persystencji           |
+| DB           | `packages/db`  | Drizzle ORM 1 RC, PostgreSQL, Docker Compose         |
 
 ### 5.1 Backend
 
@@ -227,8 +227,8 @@ Najważniejsze elementy backendu:
 
 - `PriceMonitor` - główny serwis logiki domenowej,
 - `PriceProvider` - symulacja nowych cen ofert,
-- `EventBus` - dziennik zdarzeń domenowych,
-- `PriceState` - in-memory stan produktów i alertów,
+- `EventBus` - dziennik zdarzeń domenowych zapisywany w PostgreSQL,
+- `Database` - Effect layer z Drizzle ORM i `@effect/sql-pg`,
 - `ServicesLive` - kompozycja warstw Effect,
 - background fiber - automatyczna aktualizacja cen.
 
@@ -299,7 +299,7 @@ Najważniejsze typy domenowe:
 | `DomainEvent` | Zdarzenie domenowe systemu            |
 | `Dashboard`   | Snapshot produktów, alertów i zdarzeń |
 
-Projekt zawiera też schemat bazy danych w `packages/db`, przygotowany pod persystencję:
+Projekt używa schematu bazy danych w `packages/db`:
 
 - `products`,
 - `storeOffers`,
@@ -308,14 +308,15 @@ Projekt zawiera też schemat bazy danych w `packages/db`, przygotowany pod persy
 - `domainEvents`,
 - `priceCheckJobs`.
 
-Aktualnie aplikacja demonstracyjna działa na stanie in-memory z seedami.
+Runtime aplikacji przechowuje dane w PostgreSQL. Trwale zapisywane są produkty, oferty, historia cen, alerty i zdarzenia systemowe.
 
 ## 8. Uruchamianie projektu
 
 Wymagania:
 
 - Node.js,
-- pnpm.
+- pnpm,
+- Docker z Docker Compose.
 
 Instalacja zależności:
 
@@ -323,10 +324,22 @@ Instalacja zależności:
 pnpm install
 ```
 
-Uruchomienie frontendu i backendu razem:
+Uruchomienie PostgreSQL w Dockerze, wypchnięcie schematu Drizzle i start frontendu oraz backendu:
 
 ```bash
 pnpm dev
+```
+
+Uruchomienie samej bazy danych:
+
+```bash
+pnpm docker
+```
+
+Ręczne wypchnięcie schematu Drizzle do PostgreSQL:
+
+```bash
+pnpm db:push
 ```
 
 Uruchomienie tylko backendu:
@@ -347,6 +360,13 @@ Adresy:
 | ----------- | ----------------------- |
 | Frontend    | `http://localhost:3001` |
 | Backend API | `http://localhost:3000` |
+| PostgreSQL  | `localhost:5432`        |
+
+Domyślny connection string zgodny z `docker-compose.yml`:
+
+```txt
+postgresql://postgres:password@localhost:5432/price-monitor
+```
 
 Jeżeli backend zgłasza `EADDRINUSE`, oznacza to, że port `3000` jest już zajęty przez inną instancję serwera.
 
@@ -405,6 +425,10 @@ Karty produktów są domyślnie zwinięte, żeby dashboard nie był zbyt długi.
 
 Dziennik alertów i zdarzeń przeniesiono do navbaru. Dzięki temu główny ekran skupia się na produktach, a szczegóły są dostępne na żądanie.
 
+### 10.6 PostgreSQL zamiast stanu in-memory
+
+Stan aplikacji jest przechowywany w PostgreSQL uruchamianym przez Docker Compose. Backend używa Drizzle ORM 1 RC z natywną integracją Effect dla PostgreSQL, więc operacje bazodanowe są wykonywane jako efekty, a nie przez ręczne promisy poza systemem Effect.
+
 ## 11. Podsumowanie
 
 Projekt spełnia wymagania aplikacji do monitorowania cen:
@@ -416,5 +440,6 @@ Projekt spełnia wymagania aplikacji do monitorowania cen:
 - alerty uruchamiają się automatycznie po osiągnięciu progu,
 - historia cen jest widoczna na wykresie,
 - użytkownik może filtrować dziennik alertów,
+- stan aplikacji jest trwale zapisywany w PostgreSQL,
 - UI sygnalizuje alert toastem, dźwiękiem, bannerem i podświetleniem karty,
 - frontend i backend korzystają ze wspólnego typed API contract.
