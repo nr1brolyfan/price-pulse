@@ -150,7 +150,7 @@ function DashboardDialog({
           {count}
         </span>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="h-[min(680px,calc(100svh-2rem))] grid-rows-[auto_minmax(0,1fr)]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -190,7 +190,7 @@ function AlertsPreview({
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
       <div className="flex flex-wrap gap-2">
         <AlertFilterButton
           active={filter === "all"}
@@ -213,9 +213,11 @@ function AlertsPreview({
       </div>
 
       {filteredAlerts.length === 0 ? (
-        <EmptyPreview>Brak alertów dla wybranego filtra.</EmptyPreview>
+        <div className="min-h-0 overflow-y-auto">
+          <EmptyPreview>Brak alertów dla wybranego filtra.</EmptyPreview>
+        </div>
       ) : (
-        <div className="grid max-h-[min(520px,calc(100svh-16rem))] gap-2 overflow-y-auto pr-1">
+        <div className="grid min-h-0 content-start gap-2 overflow-y-auto pr-1">
           {filteredAlerts.map((alert) => (
             <div
               key={alert.id}
@@ -297,7 +299,7 @@ function EventsPreview({ events }: { readonly events: ReadonlyArray<DomainEvent>
   }
 
   return (
-    <div className="grid max-h-[min(560px,calc(100svh-13rem))] gap-2 overflow-y-auto pr-1">
+    <div className="grid min-h-0 content-start gap-2 overflow-y-auto pr-1">
       {events.map((event) => (
         <div key={event.id} className="border-l-2 border-primary/50 bg-muted/10 px-3 py-2 text-sm">
           <p className="font-medium">{event.message}</p>
