@@ -4,7 +4,11 @@ PricePulse is a full-stack price monitoring application built for the university
 
 The app lets users track product prices, compare store offers, create price alerts, and see automatic alert notifications when monitored prices fall below configured thresholds.
 
-Full project documentation in Polish is available in [`DOKUMENTACJA.md`](./DOKUMENTACJA.md).
+Full project documentation in Polish is available in [`docs/DOKUMENTACJA.md`](./docs/DOKUMENTACJA.md).
+
+## Preview
+
+![PricePulse product dashboard](./docs/image-2.png)
 
 ## Features
 
@@ -42,7 +46,7 @@ price-monitor/
 │   ├── api/         # Shared Effect Schema + HttpApi contract
 │   ├── db/          # Drizzle schema
 │   └── ui/          # Shared UI primitives and styles
-└── DOKUMENTACJA.md  # Full project documentation
+└── docs/            # Full project documentation and screenshots
 ```
 
 ## Getting Started
