@@ -1,4 +1,4 @@
-import { Button } from "@price-monitor/ui/components/button";
+import { Button, buttonVariants } from "@price-monitor/ui/components/button";
 import {
   Card,
   CardContent,
@@ -6,6 +6,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@price-monitor/ui/components/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@price-monitor/ui/components/dialog";
 import { Input } from "@price-monitor/ui/components/input";
 import type { Alert, Dashboard, Product } from "@price-monitor/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -816,10 +824,59 @@ function MonitoringPanel({
             </div>
           ))}
 
-          {triggeredAlerts.slice(0, 3).map((alert) => (
+          <TriggeredAlertsSummary triggeredAlerts={triggeredAlerts} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TriggeredAlertsSummary({
+  triggeredAlerts,
+}: {
+  readonly triggeredAlerts: ReadonlyArray<Alert>;
+}) {
+  if (triggeredAlerts.length === 0) {
+    return null;
+  }
+
+  const latestAlert = triggeredAlerts.reduce((latest, alert) =>
+    (alert.triggeredAt ?? alert.createdAt) > (latest.triggeredAt ?? latest.createdAt)
+      ? alert
+      : latest,
+  );
+
+  return (
+    <Dialog>
+      <div className="flex flex-wrap items-center justify-between gap-3 border border-emerald-400/35 bg-emerald-400/10 px-3 py-2 text-sm shadow-[0_0_18px_rgba(16,185,129,0.1)]">
+        <div className="min-w-0">
+          <p className="inline-flex items-center gap-2 font-medium text-emerald-300">
+            <Bell className="size-4" /> {triggeredAlerts.length} uruchomione alerty
+          </p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            Ostatni próg {formatMoney(latestAlert.targetPrice.amount)} ·{" "}
+            {latestAlert.triggeredAt ? formatDate(latestAlert.triggeredAt) : "teraz"}
+          </p>
+        </div>
+
+        <DialogTrigger className={buttonVariants({ variant: "outline", size: "xs" })}>
+          Podgląd
+        </DialogTrigger>
+      </div>
+
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Uruchomione alerty</DialogTitle>
+          <DialogDescription>
+            Pełna lista progów, które zostały wykryte dla tego produktu.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid max-h-[min(460px,calc(100svh-13rem))] gap-2 overflow-y-auto pr-1">
+          {triggeredAlerts.map((alert) => (
             <div
               key={alert.id}
-              className="grid gap-2 border border-emerald-400/40 bg-emerald-400/10 px-3 py-3 text-sm shadow-[0_0_24px_rgba(16,185,129,0.12)]"
+              className="grid gap-2 border border-emerald-400/40 bg-emerald-400/10 px-3 py-3 text-sm"
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="inline-flex items-center gap-2 font-medium text-emerald-300">
@@ -834,7 +891,7 @@ function MonitoringPanel({
             </div>
           ))}
         </div>
-      </div>
-    </section>
+      </DialogContent>
+    </Dialog>
   );
 }
