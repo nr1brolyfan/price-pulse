@@ -1,100 +1,121 @@
-# price-monitor
+# PricePulse
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Start, Hono, and more.
+PricePulse is a full-stack price monitoring application built for the university project topic: **price monitoring app**.
+
+The app lets users track product prices, compare store offers, create price alerts, and see automatic alert notifications when monitored prices fall below configured thresholds.
+
+Full project documentation in Polish is available in [`DOKUMENTACJA.md`](./DOKUMENTACJA.md).
 
 ## Features
 
-- **TypeScript** - For type safety and improved developer experience
-- **TanStack Start** - SSR framework with TanStack Router
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **Hono** - Lightweight, performant server framework
-- **Node.js** - Runtime environment
-- **Drizzle** - TypeScript-first ORM
-- **PostgreSQL** - Database engine
-- **Oxlint** - Oxlint + Oxfmt (linting & formatting)
+- Product dashboard with automatic price updates
+- Collapsible product cards
+- Local product search by name and category
+- Responsive SVG price history chart
+- Store offer comparison sorted by price
+- Price alerts with create and delete actions
+- Alert notification UX: toast, product jump, banner, highlight, and sound
+- Alert journal with filters
+- System event journal
+- Typed API contract shared by frontend and backend
+
+## Stack
+
+- TypeScript
+- Effect v4 beta HTTP API backend
+- React
+- TanStack Start
+- TanStack Query
+- Vite
+- Tailwind CSS
+- Drizzle schema package for future persistence
+- Oxlint and Oxfmt
+
+## Project Structure
+
+```txt
+price-monitor/
+├── apps/
+│   ├── server/      # Effect HTTP API backend
+│   └── web/         # React + TanStack Start frontend
+├── packages/
+│   ├── api/         # Shared Effect Schema + HttpApi contract
+│   ├── db/          # Drizzle schema
+│   └── ui/          # Shared UI primitives and styles
+└── DOKUMENTACJA.md  # Full project documentation
+```
 
 ## Getting Started
 
-First, install the dependencies:
+Install dependencies:
 
 ```bash
 pnpm install
 ```
 
-## Database Setup
-
-This project uses PostgreSQL with Drizzle ORM.
-
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
-
-3. Apply the schema to your database:
+Run the frontend and backend together:
 
 ```bash
-pnpm run db:push
+pnpm dev
 ```
 
-Then, run the development server:
+Run only the backend:
 
 ```bash
-pnpm run dev
+pnpm dev:server
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
-The API is running at [http://localhost:3000](http://localhost:3000).
-
-## UI Customization
-
-React web apps in this stack share shadcn/ui primitives through `packages/ui`.
-
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
-- Update shared primitives in `packages/ui/src/components/*`
-- Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
-
-### Add more shared components
-
-Run this from the project root to add more primitives to the shared UI package:
+Run only the frontend:
 
 ```bash
-npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
+pnpm dev:web
 ```
 
-Import shared components like this:
+## Local URLs
 
-```tsx
-import { Button } from "@price-monitor/ui/components/button";
+| Service     | URL                     |
+| ----------- | ----------------------- |
+| Frontend    | `http://localhost:3001` |
+| Backend API | `http://localhost:3000` |
+
+The web app proxies `/api` requests to the backend in development.
+
+## API Overview
+
+All API routes are served under `/api`.
+
+| Method   | Endpoint                               | Description                            |
+| -------- | -------------------------------------- | -------------------------------------- |
+| `GET`    | `/api/health`                          | API health status                      |
+| `GET`    | `/api/dashboard`                       | Products, alerts, and events snapshot  |
+| `GET`    | `/api/products`                        | Product list                           |
+| `GET`    | `/api/products/:productId`             | Product details                        |
+| `POST`   | `/api/products/:productId/check-price` | Read current price without changing it |
+| `GET`    | `/api/alerts`                          | Alert list                             |
+| `POST`   | `/api/alerts`                          | Create alert                           |
+| `DELETE` | `/api/alerts/:alertId`                 | Delete alert                           |
+| `GET`    | `/api/events`                          | System event list                      |
+
+## Validation
+
+Run linting and formatting:
+
+```bash
+pnpm check
 ```
 
-### Add app-specific blocks
+Check TypeScript types:
 
-If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
-
-## Git Hooks and Formatting
-
-- Format and lint fix: `pnpm run check`
-
-## Project Structure
-
-```
-price-monitor/
-├── apps/
-│   ├── web/         # Frontend application (React + TanStack Start)
-│   └── server/      # Backend API (Hono)
-├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
-│   └── db/          # Database schema & queries
+```bash
+pnpm check-types
 ```
 
-## Available Scripts
+Build all packages and apps:
 
-- `pnpm run dev`: Start all applications in development mode
-- `pnpm run build`: Build all applications
-- `pnpm run dev:web`: Start only the web application
-- `pnpm run dev:server`: Start only the server
-- `pnpm run check-types`: Check TypeScript types across all apps
-- `pnpm run db:push`: Push schema changes to database
-- `pnpm run db:generate`: Generate database client/types
-- `pnpm run db:migrate`: Run database migrations
-- `pnpm run db:studio`: Open database studio UI
-- `pnpm run check`: Run Oxlint and Oxfmt
+```bash
+pnpm build
+```
+
+## Data
+
+The current demo version uses seeded in-memory state. The repository includes a Drizzle database schema in `packages/db`, but runtime persistence is not enabled in this version.
