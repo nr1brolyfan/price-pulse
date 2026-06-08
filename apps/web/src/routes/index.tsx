@@ -18,7 +18,7 @@ import { Input } from "@price-monitor/ui/components/input";
 import type { Alert, Dashboard, Product } from "@price-monitor/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Activity, Bell, RefreshCw, TrendingDown, Zap } from "lucide-react";
+import { Activity, Bell, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -370,33 +370,20 @@ function Hero({ dashboard }: { readonly dashboard: Dashboard }) {
     (alert) => alert.enabled && !alert.triggeredAt,
   ).length;
   const triggeredAlerts = dashboard.alerts.length - activeAlerts;
-  const priceChecks = dashboard.products.reduce((sum, product) => sum + product.history.length, 0);
-  const bestDrop = Math.max(
-    ...dashboard.products.map((product) =>
-      product.history[0]?.amount ? product.history[0].amount - product.currentPrice.amount : 0,
-    ),
-  );
 
   return (
-    <section className="overflow-hidden border bg-[radial-gradient(circle_at_top_left,_hsl(var(--primary)/0.22),_transparent_34%),linear-gradient(135deg,_hsl(var(--muted))_0%,_hsl(var(--background))_48%,_hsl(var(--card))_100%)] p-5 lg:p-7">
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
-        <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 border bg-background/60 px-3 py-1 font-mono text-xs uppercase tracking-[0.28em] text-muted-foreground">
+    <section className="overflow-hidden border bg-[radial-gradient(circle_at_top_left,_hsl(var(--primary)/0.18),_transparent_30%),linear-gradient(135deg,_hsl(var(--muted))_0%,_hsl(var(--background))_52%,_hsl(var(--card))_100%)] p-4 lg:p-5">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="min-w-0 space-y-3">
+          <div className="inline-flex items-center gap-2 border bg-background/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
             <Zap className="size-3" /> Effect v4 HTTP API
           </div>
-          <div>
-            <h2 className="max-w-3xl text-3xl font-semibold tracking-tight lg:text-5xl">
-              Monitoring cen z typed contract i alertami
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm/relaxed text-muted-foreground">
-              Backend sam symuluje mały dryft cen, a dashboard co sekundę pobiera typed snapshot z
-              `@price-monitor/api`, żeby aktualizować ceny, alerty i wykresy bez ręcznego
-              sprawdzania.
-            </p>
-          </div>
+          <h2 className="max-w-3xl text-2xl font-semibold tracking-tight lg:text-4xl">
+            Monitoring cen z alertami
+          </h2>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-3 lg:w-[520px]">
           <Metric
             icon={<Activity className="size-4" />}
             label="Produkty"
@@ -408,17 +395,6 @@ function Hero({ dashboard }: { readonly dashboard: Dashboard }) {
             value={activeAlerts.toString()}
           />
           <Metric
-            icon={<RefreshCw className="size-4" />}
-            label="Pomiary"
-            value={priceChecks.toString()}
-          />
-          <Metric
-            icon={<TrendingDown className="size-4" />}
-            label="Największy spadek"
-            value={formatMoney(Math.max(0, bestDrop))}
-          />
-          <Metric
-            className="col-span-2"
             icon={<Bell className="size-4" />}
             label="Uruchomione alerty"
             value={triggeredAlerts.toString()}
@@ -441,12 +417,12 @@ function Metric({
   readonly value: string;
 }) {
   return (
-    <div className={`border bg-background/70 p-3 ${className}`}>
-      <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+    <div className={`grid grid-rows-[2rem_auto] border bg-background/70 p-2.5 ${className}`}>
+      <div className="flex items-start gap-2 text-muted-foreground">
         {icon}
-        <span className="text-xs uppercase tracking-wide">{label}</span>
+        <span className="text-[10px] leading-tight uppercase tracking-wide">{label}</span>
       </div>
-      <div className="text-xl font-semibold">{value}</div>
+      <div className="text-lg font-semibold">{value}</div>
     </div>
   );
 }
