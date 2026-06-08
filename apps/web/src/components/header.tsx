@@ -12,7 +12,7 @@ import type { Alert, DomainEvent, Product } from "@price-monitor/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Activity, Bell } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "../lib/api-client";
@@ -36,6 +36,8 @@ const formatDate = (value: string) =>
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+
+type AlertFilter = "active" | "all" | "triggered";
 
 export default function Header() {
   const links = [{ to: "/", label: "Dashboard" }] as const;
@@ -172,56 +174,120 @@ function AlertsPreview({
   readonly onDeleteAlert: (alertId: string) => void;
   readonly products: ReadonlyArray<Product>;
 }) {
+  const [filter, setFilter] = useState<AlertFilter>("all");
   const productName = (productId: string) =>
     products.find((product) => product.id === productId)?.name ?? productId;
+  const activeAlerts = alerts.filter((alert) => !alert.triggeredAt);
+  const triggeredAlerts = alerts.filter((alert) => alert.triggeredAt);
+  const filteredAlerts = alerts.filter((alert) => {
+    if (filter === "active") return !alert.triggeredAt;
+    if (filter === "triggered") return Boolean(alert.triggeredAt);
+    return true;
+  });
 
   if (alerts.length === 0) {
     return <EmptyPreview>Nie ma jeszcze żadnych reguł alertów.</EmptyPreview>;
   }
 
   return (
-    <div className="grid max-h-[min(560px,calc(100svh-13rem))] gap-2 overflow-y-auto pr-1">
-      {alerts.map((alert) => (
-        <div
-          key={alert.id}
-          className={`border p-3 text-sm ${
-            alert.triggeredAt
-              ? "border-emerald-400/40 bg-emerald-400/10 shadow-[0_0_18px_rgba(16,185,129,0.12)]"
-              : "bg-muted/20"
-          }`}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-medium">{productName(alert.productId)}</p>
-              <p className="text-muted-foreground">Próg: {formatMoney(alert.targetPrice.amount)}</p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <span
-                className={`border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
-                  alert.triggeredAt
-                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                    : "bg-background/60 text-muted-foreground"
-                }`}
+    <div className="grid gap-3">
+      <div className="flex flex-wrap gap-2">
+        <AlertFilterButton
+          active={filter === "all"}
+          count={alerts.length}
+          label="Wszystkie"
+          onClick={() => setFilter("all")}
+        />
+        <AlertFilterButton
+          active={filter === "active"}
+          count={activeAlerts.length}
+          label="Aktywne"
+          onClick={() => setFilter("active")}
+        />
+        <AlertFilterButton
+          active={filter === "triggered"}
+          count={triggeredAlerts.length}
+          label="Uruchomione"
+          onClick={() => setFilter("triggered")}
+        />
+      </div>
+
+      {filteredAlerts.length === 0 ? (
+        <EmptyPreview>Brak alertów dla wybranego filtra.</EmptyPreview>
+      ) : (
+        <div className="grid max-h-[min(520px,calc(100svh-16rem))] gap-2 overflow-y-auto pr-1">
+          {filteredAlerts.map((alert) => (
+            <div
+              key={alert.id}
+              className={`border p-3 text-sm ${
+                alert.triggeredAt
+                  ? "border-emerald-400/40 bg-emerald-400/10 shadow-[0_0_18px_rgba(16,185,129,0.12)]"
+                  : "bg-muted/20"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium">{productName(alert.productId)}</p>
+                  <p className="text-muted-foreground">
+                    Próg: {formatMoney(alert.targetPrice.amount)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={`border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
+                      alert.triggeredAt
+                        ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                        : "bg-background/60 text-muted-foreground"
+                    }`}
+                  >
+                    {alert.triggeredAt ? "ALERT" : "Aktywny"}
+                  </span>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="destructive"
+                    disabled={isDeleting && deletingAlertId === alert.id}
+                    onClick={() => onDeleteAlert(alert.id)}
+                  >
+                    {isDeleting && deletingAlertId === alert.id ? "Usuwanie..." : "Usuń"}
+                  </Button>
+                </div>
+              </div>
+              <p
+                className={
+                  alert.triggeredAt ? "mt-2 text-emerald-300" : "mt-2 text-muted-foreground"
+                }
               >
-                {alert.triggeredAt ? "ALERT" : "Aktywny"}
-              </span>
-              <Button
-                type="button"
-                size="xs"
-                variant="destructive"
-                disabled={isDeleting && deletingAlertId === alert.id}
-                onClick={() => onDeleteAlert(alert.id)}
-              >
-                {isDeleting && deletingAlertId === alert.id ? "Usuwanie..." : "Usuń"}
-              </Button>
+                {alert.triggeredAt
+                  ? `Uruchomiony ${formatDate(alert.triggeredAt)}`
+                  : "Czeka na próg"}
+              </p>
             </div>
-          </div>
-          <p className={alert.triggeredAt ? "mt-2 text-emerald-300" : "mt-2 text-muted-foreground"}>
-            {alert.triggeredAt ? `Uruchomiony ${formatDate(alert.triggeredAt)}` : "Czeka na próg"}
-          </p>
+          ))}
         </div>
-      ))}
+      )}
     </div>
+  );
+}
+
+function AlertFilterButton({
+  active,
+  count,
+  label,
+  onClick,
+}: {
+  readonly active: boolean;
+  readonly count: number;
+  readonly label: string;
+  readonly onClick: () => void;
+}) {
+  return (
+    <Button type="button" size="sm" variant={active ? "default" : "outline"} onClick={onClick}>
+      {label}
+      <span className="border border-current/20 bg-background/20 px-1.5 py-0.5 font-mono text-[10px] leading-none">
+        {count}
+      </span>
+    </Button>
   );
 }
 
