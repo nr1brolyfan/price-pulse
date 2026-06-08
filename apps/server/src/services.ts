@@ -1,4 +1,5 @@
 import {
+  AlertNotFound,
   ProductNotFound,
   type Alert,
   type Dashboard,
@@ -60,6 +61,7 @@ export class PriceMonitor extends Context.Service<
       readonly productId: string;
     }) => Effect.Effect<Alert, ProductNotFound>;
     readonly dashboard: Effect.Effect<Dashboard>;
+    readonly deleteAlert: (alertId: string) => Effect.Effect<Alert, AlertNotFound>;
     readonly getProduct: (productId: string) => Effect.Effect<Product, ProductNotFound>;
     readonly health: Effect.Effect<Health>;
     readonly listAlerts: Effect.Effect<ReadonlyArray<Alert>>;
@@ -276,6 +278,27 @@ const PriceMonitorLive = Layer.effect(
 
         return { alerts, events, products };
       }),
+      deleteAlert: (alertId: string) =>
+        Effect.gen(function* () {
+          const deletedAlert = yield* Ref.modify(state.alerts, (alerts) => {
+            const alert = alerts.find((item) => item.id === alertId);
+
+            if (!alert) {
+              return [undefined, alerts] as const;
+            }
+
+            return [alert, alerts.filter((item) => item.id !== alertId)] as const;
+          });
+
+          if (!deletedAlert) {
+            return yield* new AlertNotFound({
+              alertId,
+              message: `Alert ${alertId} was not found`,
+            });
+          }
+
+          return deletedAlert;
+        }),
       getProduct,
       health: Effect.sync(() => ({
         status: "ok" as const,

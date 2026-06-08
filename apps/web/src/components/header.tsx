@@ -1,4 +1,4 @@
-import { buttonVariants } from "@price-monitor/ui/components/button";
+import { Button, buttonVariants } from "@price-monitor/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -9,12 +9,14 @@ import {
 } from "@price-monitor/ui/components/dialog";
 import { cn } from "@price-monitor/ui/lib/utils";
 import type { Alert, DomainEvent, Product } from "@price-monitor/api";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Activity, Bell } from "lucide-react";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 
-import { dashboardQueryOptions } from "../lib/queries";
+import { apiClient } from "../lib/api-client";
+import { dashboardQueryOptions, invalidateDashboard } from "../lib/queries";
 
 const moneyFormatter = new Intl.NumberFormat("pl-PL", {
   currency: "PLN",
@@ -32,14 +34,32 @@ const formatDate = (value: string) =>
     month: "2-digit",
   }).format(new Date(value));
 
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 export default function Header() {
   const links = [{ to: "/", label: "Dashboard" }] as const;
+  const queryClient = useQueryClient();
   const dashboardQuery = useQuery(dashboardQueryOptions());
   const dashboard = dashboardQuery.data;
   const alerts = dashboard?.alerts ?? [];
   const events = dashboard?.events ?? [];
   const products = dashboard?.products ?? [];
   const triggeredAlerts = alerts.filter((alert) => alert.triggeredAt).length;
+  const deleteAlertMutation = useMutation({
+    mutationFn: apiClient.deleteAlert,
+    onError: (error) => {
+      toast.error("Nie udało się usunąć alertu", {
+        description: getErrorMessage(error),
+      });
+    },
+    onSuccess: (alert) => {
+      queryClient.invalidateQueries(invalidateDashboard);
+      toast.success("Alert usunięty", {
+        description: `Usunięto próg ${formatMoney(alert.targetPrice.amount)}.`,
+      });
+    },
+  });
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
@@ -72,7 +92,13 @@ export default function Header() {
             label="Alerty"
             title="Alerty cenowe"
           >
-            <AlertsPreview alerts={alerts} products={products} />
+            <AlertsPreview
+              alerts={alerts}
+              deletingAlertId={deleteAlertMutation.variables}
+              isDeleting={deleteAlertMutation.isPending}
+              products={products}
+              onDeleteAlert={(alertId) => deleteAlertMutation.mutate(alertId)}
+            />
           </DashboardDialog>
 
           <DashboardDialog
@@ -135,9 +161,15 @@ function DashboardDialog({
 
 function AlertsPreview({
   alerts,
+  deletingAlertId,
+  isDeleting,
+  onDeleteAlert,
   products,
 }: {
   readonly alerts: ReadonlyArray<Alert>;
+  readonly deletingAlertId?: string;
+  readonly isDeleting: boolean;
+  readonly onDeleteAlert: (alertId: string) => void;
   readonly products: ReadonlyArray<Product>;
 }) {
   const productName = (productId: string) =>
@@ -163,15 +195,26 @@ function AlertsPreview({
               <p className="font-medium">{productName(alert.productId)}</p>
               <p className="text-muted-foreground">Próg: {formatMoney(alert.targetPrice.amount)}</p>
             </div>
-            <span
-              className={`border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
-                alert.triggeredAt
-                  ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                  : "bg-background/60 text-muted-foreground"
-              }`}
-            >
-              {alert.triggeredAt ? "ALERT" : "Aktywny"}
-            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              <span
+                className={`border px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
+                  alert.triggeredAt
+                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                    : "bg-background/60 text-muted-foreground"
+                }`}
+              >
+                {alert.triggeredAt ? "ALERT" : "Aktywny"}
+              </span>
+              <Button
+                type="button"
+                size="xs"
+                variant="destructive"
+                disabled={isDeleting && deletingAlertId === alert.id}
+                onClick={() => onDeleteAlert(alert.id)}
+              >
+                {isDeleting && deletingAlertId === alert.id ? "Usuwanie..." : "Usuń"}
+              </Button>
+            </div>
           </div>
           <p className={alert.triggeredAt ? "mt-2 text-emerald-300" : "mt-2 text-muted-foreground"}>
             {alert.triggeredAt ? `Uruchomiony ${formatDate(alert.triggeredAt)}` : "Czeka na próg"}

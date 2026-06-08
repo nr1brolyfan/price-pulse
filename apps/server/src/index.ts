@@ -52,6 +52,12 @@ const ApiHandlersLive = HttpApiBuilder.group(PriceMonitorApi, "monitor", (handle
         return yield* monitor.createAlert(payload);
       }),
     )
+    .handle("deleteAlert", ({ params }) =>
+      Effect.gen(function* () {
+        const monitor = yield* PriceMonitor;
+        return yield* monitor.deleteAlert(params.alertId);
+      }),
+    )
     .handle("events", () =>
       Effect.gen(function* () {
         const monitor = yield* PriceMonitor;
@@ -71,7 +77,7 @@ const allowedOrigins = Array.from(
 const RouterLive = Layer.mergeAll(
   HttpRouter.cors({
     allowedHeaders: ["content-type"],
-    allowedMethods: ["GET", "POST", "OPTIONS"],
+    allowedMethods: ["DELETE", "GET", "POST", "OPTIONS"],
     allowedOrigins,
   }),
   ApiLive,

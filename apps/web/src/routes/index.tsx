@@ -72,6 +72,7 @@ const getDashboardErrorMessage = (error: unknown) => {
 };
 
 type AlertNotification = {
+  readonly alertId: string;
   readonly productName: string;
   readonly targetAmount: number;
   readonly triggeredAt: string;
@@ -95,6 +96,27 @@ function HomeComponent() {
   const createAlertMutation = useMutation({
     mutationFn: apiClient.createAlert,
     onSuccess: () => queryClient.invalidateQueries(invalidateDashboard),
+  });
+
+  const deleteAlertMutation = useMutation({
+    mutationFn: apiClient.deleteAlert,
+    onError: (error) => {
+      toast.error("Nie udało się usunąć alertu", {
+        description: getErrorMessage(error),
+      });
+    },
+    onSuccess: (alert) => {
+      queryClient.invalidateQueries(invalidateDashboard);
+      setHighlightedProductIds((current) => {
+        const next = new Set(current);
+        next.delete(alert.productId);
+        return next;
+      });
+      setLatestAlert((current) => (current?.alertId === alert.id ? undefined : current));
+      toast.success("Alert usunięty", {
+        description: `Usunięto próg ${formatMoney(alert.targetPrice.amount)}.`,
+      });
+    },
   });
 
   useEffect(() => {
@@ -147,6 +169,7 @@ function HomeComponent() {
     const product = dashboard.products.find((item) => item.id === latest.productId);
     const productName = product?.name ?? latest.productId;
     const notification = {
+      alertId: latest.id,
       productName,
       targetAmount: latest.targetPrice.amount,
       triggeredAt: latest.triggeredAt ?? latest.createdAt,
@@ -203,6 +226,18 @@ function HomeComponent() {
     }, 8000);
   }, [dashboardQuery.data]);
 
+  useEffect(() => {
+    const dashboard = dashboardQuery.data;
+
+    if (!dashboard || !latestAlert) {
+      return;
+    }
+
+    if (!dashboard.alerts.some((alert) => alert.id === latestAlert.alertId)) {
+      setLatestAlert(undefined);
+    }
+  }, [dashboardQuery.data, latestAlert]);
+
   const createAlert = (event: FormEvent<HTMLFormElement>, productId: string) => {
     event.preventDefault();
 
@@ -242,9 +277,13 @@ function HomeComponent() {
 
       {latestAlert && <AlertBanner notification={latestAlert} soundReady={alertSoundReady} />}
 
-      {createAlertMutation.isError && (
+      {(createAlertMutation.isError || deleteAlertMutation.isError) && (
         <Card className="border-destructive/40 bg-destructive/10">
-          <CardContent>{getErrorMessage(createAlertMutation.error)}</CardContent>
+          <CardContent>
+            {createAlertMutation.error
+              ? getErrorMessage(createAlertMutation.error)
+              : getErrorMessage(deleteAlertMutation.error)}
+          </CardContent>
         </Card>
       )}
 
@@ -253,13 +292,16 @@ function HomeComponent() {
           <ProductCard
             key={product.id}
             alerts={dashboard.alerts.filter((alert) => alert.productId === product.id)}
+            deletingAlertId={deleteAlertMutation.variables}
             isAlerting={highlightedProductIds.has(product.id)}
             isCreatingAlert={
               createAlertMutation.isPending &&
               createAlertMutation.variables?.productId === product.id
             }
+            isDeletingAlert={deleteAlertMutation.isPending}
             product={product}
             onCreateAlert={(event) => createAlert(event, product.id)}
+            onDeleteAlert={(alertId) => deleteAlertMutation.mutate(alertId)}
           />
         ))}
       </section>
@@ -414,15 +456,21 @@ function AlertBanner({
 
 function ProductCard({
   alerts,
+  deletingAlertId,
   isAlerting,
   isCreatingAlert,
+  isDeletingAlert,
   onCreateAlert,
+  onDeleteAlert,
   product,
 }: {
   readonly alerts: ReadonlyArray<Alert>;
+  readonly deletingAlertId?: string;
   readonly isAlerting: boolean;
   readonly isCreatingAlert: boolean;
+  readonly isDeletingAlert: boolean;
   readonly onCreateAlert: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onDeleteAlert: (alertId: string) => void;
   readonly product: Product;
 }) {
   const firstPrice = product.history[0]?.amount ?? product.currentPrice.amount;
@@ -513,9 +561,12 @@ function ProductCard({
           <OffersPanel product={product} />
           <MonitoringPanel
             activeAlerts={activeAlerts}
+            deletingAlertId={deletingAlertId}
             defaultAlertAmount={defaultAlertAmount}
             isCreatingAlert={isCreatingAlert}
+            isDeletingAlert={isDeletingAlert}
             onCreateAlert={onCreateAlert}
+            onDeleteAlert={onDeleteAlert}
             triggeredAlerts={triggeredAlerts}
           />
         </div>
@@ -774,15 +825,21 @@ function PriceChart({ product }: { readonly product: Product }) {
 
 function MonitoringPanel({
   activeAlerts,
+  deletingAlertId,
   defaultAlertAmount,
   isCreatingAlert,
+  isDeletingAlert,
   onCreateAlert,
+  onDeleteAlert,
   triggeredAlerts,
 }: {
   readonly activeAlerts: ReadonlyArray<Alert>;
+  readonly deletingAlertId?: string;
   readonly defaultAlertAmount: number;
   readonly isCreatingAlert: boolean;
+  readonly isDeletingAlert: boolean;
   readonly onCreateAlert: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onDeleteAlert: (alertId: string) => void;
   readonly triggeredAlerts: ReadonlyArray<Alert>;
 }) {
   return (
@@ -819,12 +876,28 @@ function MonitoringPanel({
               key={alert.id}
               className="flex items-center justify-between gap-3 border bg-background/50 px-3 py-2 text-sm"
             >
-              <span className="text-muted-foreground">Aktywny próg</span>
-              <span className="font-semibold">{formatMoney(alert.targetPrice.amount)}</span>
+              <div className="min-w-0">
+                <p className="text-muted-foreground">Aktywny próg</p>
+                <p className="font-semibold">{formatMoney(alert.targetPrice.amount)}</p>
+              </div>
+              <Button
+                type="button"
+                size="xs"
+                variant="destructive"
+                disabled={isDeletingAlert && deletingAlertId === alert.id}
+                onClick={() => onDeleteAlert(alert.id)}
+              >
+                {isDeletingAlert && deletingAlertId === alert.id ? "Usuwanie..." : "Usuń"}
+              </Button>
             </div>
           ))}
 
-          <TriggeredAlertsSummary triggeredAlerts={triggeredAlerts} />
+          <TriggeredAlertsSummary
+            deletingAlertId={deletingAlertId}
+            isDeletingAlert={isDeletingAlert}
+            triggeredAlerts={triggeredAlerts}
+            onDeleteAlert={onDeleteAlert}
+          />
         </div>
       </div>
     </section>
@@ -832,8 +905,14 @@ function MonitoringPanel({
 }
 
 function TriggeredAlertsSummary({
+  deletingAlertId,
+  isDeletingAlert,
+  onDeleteAlert,
   triggeredAlerts,
 }: {
+  readonly deletingAlertId?: string;
+  readonly isDeletingAlert: boolean;
+  readonly onDeleteAlert: (alertId: string) => void;
   readonly triggeredAlerts: ReadonlyArray<Alert>;
 }) {
   if (triggeredAlerts.length === 0) {
@@ -882,7 +961,18 @@ function TriggeredAlertsSummary({
                 <span className="inline-flex items-center gap-2 font-medium text-emerald-300">
                   <Bell className="size-4" /> Alert uruchomiony
                 </span>
-                <span className="font-semibold">{formatMoney(alert.targetPrice.amount)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{formatMoney(alert.targetPrice.amount)}</span>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="destructive"
+                    disabled={isDeletingAlert && deletingAlertId === alert.id}
+                    onClick={() => onDeleteAlert(alert.id)}
+                  >
+                    {isDeletingAlert && deletingAlertId === alert.id ? "Usuwanie..." : "Usuń"}
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Wykryto {alert.triggeredAt ? formatDate(alert.triggeredAt) : "teraz"}. Produkt

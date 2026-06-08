@@ -87,7 +87,13 @@ export class ProductNotFound extends Schema.TaggedErrorClass<ProductNotFound>()(
   message: Schema.String,
 }) {}
 
+export class AlertNotFound extends Schema.TaggedErrorClass<AlertNotFound>()("AlertNotFound", {
+  alertId: AlertId,
+  message: Schema.String,
+}) {}
+
 export const ProductNotFoundResponse = ProductNotFound.pipe(HttpApiSchema.status("NotFound"));
+export const AlertNotFoundResponse = AlertNotFound.pipe(HttpApiSchema.status("NotFound"));
 
 export const MonitorGroup = HttpApiGroup.make("monitor")
   .add(
@@ -129,6 +135,13 @@ export const MonitorGroup = HttpApiGroup.make("monitor")
       payload: CreateAlertPayload,
       success: Alert.pipe(HttpApiSchema.status("Created")),
       error: ProductNotFoundResponse,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.delete("deleteAlert", "/alerts/:alertId", {
+      params: { alertId: AlertId },
+      success: Alert,
+      error: AlertNotFoundResponse,
     }),
   )
   .add(

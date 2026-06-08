@@ -38,6 +38,8 @@ export const apiClient = {
   createAlert: (payload: { readonly amount: number; readonly productId: string }) =>
     runApi((client) => client.monitor.createAlert({ payload })),
   dashboard: () => runApi((client) => client.monitor.dashboard()),
+  deleteAlert: (alertId: string) =>
+    runApi((client) => client.monitor.deleteAlert({ params: { alertId } })),
   product: (productId: string) =>
     runApi((client) => client.monitor.product({ params: { productId } })),
 };
