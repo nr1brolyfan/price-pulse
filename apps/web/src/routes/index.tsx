@@ -222,8 +222,9 @@ function Hero({ dashboard }: { readonly dashboard: Dashboard }) {
               Monitoring cen z typed contract i alertami
             </h2>
             <p className="mt-3 max-w-2xl text-sm/relaxed text-muted-foreground">
-              Dashboard korzysta z klienta wygenerowanego z `@price-monitor/api`, a stan zapytań
-              obsługuje TanStack Query.
+              Backend sam symuluje mały dryft cen, a dashboard co sekundę pobiera typed snapshot z
+              `@price-monitor/api`, żeby aktualizować ceny, alerty i wykresy bez ręcznego
+              sprawdzania.
             </p>
           </div>
         </div>
@@ -357,7 +358,7 @@ function ProductCard({
             )}
             <Button type="button" disabled={isChecking} onClick={onCheckPrice}>
               <RefreshCw className={isChecking ? "animate-spin" : ""} />
-              {isChecking ? "Sprawdzanie..." : "Sprawdź cenę"}
+              {isChecking ? "Pobieranie..." : "Pobierz cenę"}
             </Button>
           </div>
         </header>
@@ -701,7 +702,7 @@ function EventsCard({ events }: { readonly events: ReadonlyArray<DomainEvent> })
     <Card>
       <CardHeader>
         <CardTitle>Zdarzenia systemowe</CardTitle>
-        <CardDescription>EventBus pokazany w UI</CardDescription>
+        <CardDescription>Automatyczny monitoring i ręczne pulle</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2">
         {events.map((event) => (

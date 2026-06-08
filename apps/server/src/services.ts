@@ -16,9 +16,14 @@ const toMoney = (amount: number) => ({
   currency: "PLN" as const,
 });
 
+const maxHistoryPoints = 80;
+const priceDriftInterval = "3 seconds";
+
 const nowIso = () => new Date().toISOString();
 
 const makeId = (prefix: string) => `${prefix}-${randomUUID()}`;
+
+const randomDriftMultiplier = () => 1 + (Math.random() - 0.52) * 0.03;
 
 class PriceState extends Context.Service<
   PriceState,
@@ -39,7 +44,10 @@ export class EventBus extends Context.Service<
 export class PriceProvider extends Context.Service<
   PriceProvider,
   {
-    readonly currentPriceFor: (product: Product) => Effect.Effect<Product["currentPrice"]>;
+    readonly nextOffersFor: (
+      product: Product,
+      checkedAt: string,
+    ) => Effect.Effect<Product["offers"]>;
   }
 >()("price-monitor/PriceProvider") {}
 
@@ -57,6 +65,7 @@ export class PriceMonitor extends Context.Service<
     readonly listAlerts: Effect.Effect<ReadonlyArray<Alert>>;
     readonly listEvents: Effect.Effect<ReadonlyArray<DomainEvent>>;
     readonly listProducts: Effect.Effect<ReadonlyArray<Product>>;
+    readonly updateMarketPrices: Effect.Effect<ReadonlyArray<Product>>;
   }
 >()("price-monitor/PriceMonitor") {}
 
@@ -92,12 +101,14 @@ const EventBusLive = Layer.effect(
 );
 
 const PriceProviderLive = Layer.succeed(PriceProvider, {
-  currentPriceFor: (product) => {
-    const signal = product.id.length + product.history.length + product.offers.length;
-    const direction = signal % 4 === 0 ? 1.03 : 0.96 - (signal % 3) / 100;
-
-    return Effect.succeed(toMoney(Math.max(1, product.currentPrice.amount * direction)));
-  },
+  nextOffersFor: (product, checkedAt) =>
+    Effect.sync(() =>
+      product.offers.map((offer) => ({
+        ...offer,
+        lastCheckedAt: checkedAt,
+        lastPrice: toMoney(Math.max(1, offer.lastPrice.amount * randomDriftMultiplier())),
+      })),
+    ),
 });
 
 const PriceMonitorLive = Layer.effect(
@@ -126,56 +137,27 @@ const PriceMonitorLive = Layer.effect(
         return product;
       });
 
-    const checkPrice = (productId: string) =>
+    const bestPriceFromOffers = (product: Product, offers: Product["offers"]) =>
+      offers.reduce<Product["currentPrice"]>(
+        (best, offer) => (offer.lastPrice.amount < best.amount ? offer.lastPrice : best),
+        offers[0]?.lastPrice ?? product.currentPrice,
+      );
+
+    const triggerAlertsFor = (product: Product, triggeredAt: string) =>
       Effect.gen(function* () {
-        const product = yield* getProduct(productId);
-        const nextPrice = yield* priceProvider.currentPriceFor(product);
-        const checkedAt = nowIso();
-        const priceDropped = nextPrice.amount < product.currentPrice.amount;
-
-        const updatedProduct: Product = {
-          ...product,
-          currentPrice: nextPrice,
-          lowestPrice:
-            nextPrice.amount < product.lowestPrice.amount ? nextPrice : product.lowestPrice,
-          history: [...product.history, { ...nextPrice, checkedAt }],
-          offers: product.offers.map((offer, index) =>
-            index === 0
-              ? {
-                  ...offer,
-                  lastCheckedAt: checkedAt,
-                  lastPrice: nextPrice,
-                }
-              : offer,
-          ),
-          updatedAt: checkedAt,
-        };
-
-        yield* Ref.update(state.products, (products) =>
-          products.map((item) => (item.id === productId ? updatedProduct : item)),
-        );
-
-        yield* eventBus.publish({
-          type: priceDropped ? "PriceDropped" : "PriceChecked",
-          productId,
-          message: priceDropped
-            ? `Cena ${product.name} spadła do ${nextPrice.amount} PLN.`
-            : `Sprawdzono cenę ${product.name}: ${nextPrice.amount} PLN.`,
-        });
-
         const triggeredAlerts = yield* Ref.modify(state.alerts, (alerts) => {
           const triggered: Array<Alert> = [];
           const nextAlerts = alerts.map((alert) => {
             if (
-              alert.productId !== productId ||
+              alert.productId !== product.id ||
               !alert.enabled ||
               alert.triggeredAt ||
-              nextPrice.amount > alert.targetPrice.amount
+              product.currentPrice.amount > alert.targetPrice.amount
             ) {
               return alert;
             }
 
-            const nextAlert = { ...alert, triggeredAt: checkedAt };
+            const nextAlert = { ...alert, triggeredAt };
             triggered.push(nextAlert);
             return nextAlert;
           });
@@ -186,29 +168,105 @@ const PriceMonitorLive = Layer.effect(
         yield* Effect.forEach(triggeredAlerts, (alert) =>
           eventBus.publish({
             type: "AlertTriggered",
-            productId,
+            productId: product.id,
             message: `Alert ${alert.targetPrice.amount} PLN dla ${product.name} został uruchomiony.`,
           }),
         );
 
-        return updatedProduct;
+        return triggeredAlerts;
       });
 
-    return {
-      checkPrice,
-      createAlert: (payload) =>
+    const updateMarketPrices = Effect.gen(function* () {
+      const products = yield* Ref.get(state.products);
+      const checkedAt = nowIso();
+
+      const changes = yield* Effect.forEach(products, (product) =>
         Effect.gen(function* () {
-          yield* getProduct(payload.productId);
+          const nextOffers = yield* priceProvider.nextOffersFor(product, checkedAt);
+          const nextPrice = bestPriceFromOffers(product, nextOffers);
+          const priceChanged = nextPrice.amount !== product.currentPrice.amount;
+          const priceDropped = nextPrice.amount < product.currentPrice.amount;
+
+          const updatedProduct: Product = {
+            ...product,
+            currentPrice: nextPrice,
+            lowestPrice:
+              nextPrice.amount < product.lowestPrice.amount ? nextPrice : product.lowestPrice,
+            history: priceChanged
+              ? [...product.history, { ...nextPrice, checkedAt }].slice(-maxHistoryPoints)
+              : product.history,
+            offers: nextOffers,
+            updatedAt: checkedAt,
+          };
+
+          return { priceChanged, priceDropped, product: updatedProduct };
+        }),
+      );
+
+      const updatedProducts = changes.map((change) => change.product);
+
+      yield* Ref.set(state.products, updatedProducts);
+
+      yield* Effect.forEach(
+        changes.filter((change) => change.priceChanged),
+        (change) =>
+          eventBus.publish({
+            type: change.priceDropped ? "PriceDropped" : "PriceUpdated",
+            productId: change.product.id,
+            message: change.priceDropped
+              ? `Cena ${change.product.name} spadła do ${change.product.currentPrice.amount} PLN.`
+              : `Cena ${change.product.name} zmieniła się do ${change.product.currentPrice.amount} PLN.`,
+          }),
+      );
+
+      yield* Effect.forEach(
+        changes.filter((change) => change.priceChanged),
+        (change) => triggerAlertsFor(change.product, checkedAt),
+      );
+
+      return updatedProducts;
+    });
+
+    const checkPrice = (productId: string) =>
+      Effect.gen(function* () {
+        const product = yield* getProduct(productId);
+
+        yield* eventBus.publish({
+          type: "PriceChecked",
+          productId,
+          message: `Pobrano aktualną cenę ${product.name}: ${product.currentPrice.amount} PLN.`,
+        });
+
+        return product;
+      });
+
+    const monitor = {
+      checkPrice,
+      createAlert: (payload: { readonly amount: number; readonly productId: string }) =>
+        Effect.gen(function* () {
+          const product = yield* getProduct(payload.productId);
+          const createdAt = nowIso();
+          const shouldTrigger = product.currentPrice.amount <= payload.amount;
 
           const alert: Alert = {
             id: makeId("alert"),
             productId: payload.productId,
             targetPrice: toMoney(payload.amount),
             enabled: true,
-            createdAt: nowIso(),
+            createdAt,
+            ...(shouldTrigger ? { triggeredAt: createdAt } : {}),
           };
 
           yield* Ref.update(state.alerts, (alerts) => [alert, ...alerts]);
+
+          if (shouldTrigger) {
+            yield* eventBus.publish({
+              type: "AlertTriggered",
+              productId: product.id,
+              message: `Alert ${alert.targetPrice.amount} PLN dla ${product.name} został uruchomiony.`,
+            });
+          }
+
           return alert;
         }),
       dashboard: Effect.gen(function* () {
@@ -227,7 +285,17 @@ const PriceMonitorLive = Layer.effect(
       listAlerts,
       listEvents,
       listProducts,
+      updateMarketPrices,
     };
+
+    yield* Effect.gen(function* () {
+      while (true) {
+        yield* Effect.sleep(priceDriftInterval);
+        yield* monitor.updateMarketPrices;
+      }
+    }).pipe(Effect.forkScoped({ startImmediately: true }));
+
+    return monitor;
   }),
 ).pipe(Layer.provide(Layer.mergeAll(PriceStateLive, EventBusLive, PriceProviderLive)));
 

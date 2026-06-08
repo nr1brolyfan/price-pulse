@@ -11,7 +11,9 @@ export const dashboardQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.dashboard,
     queryFn: apiClient.dashboard,
-    staleTime: 10_000,
+    refetchInterval: 1_000,
+    refetchIntervalInBackground: true,
+    staleTime: 1_000,
   });
 
 export const productQueryOptions = (productId: string) =>

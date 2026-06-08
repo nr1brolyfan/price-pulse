@@ -55,7 +55,7 @@ export type Alert = typeof Alert.Type;
 
 export const DomainEvent = Schema.Struct({
   id: EventId,
-  type: Schema.Literals(["PriceChecked", "PriceDropped", "AlertTriggered"]),
+  type: Schema.Literals(["PriceChecked", "PriceDropped", "PriceUpdated", "AlertTriggered"]),
   productId: ProductId,
   message: Schema.String,
   createdAt: Schema.String,
