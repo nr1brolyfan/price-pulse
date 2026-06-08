@@ -1,0 +1,38 @@
+{
+  "name": "price-monitor",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r dev",
+    "build": "pnpm -r build",
+    "check-types": "pnpm -r check-types",
+    "dev:web": "pnpm --filter web dev",
+    "dev:server": "pnpm --filter server dev",
+    "db:push": "pnpm --filter @price-monitor/db db:push",
+    "db:studio": "pnpm --filter @price-monitor/db db:studio",
+    "db:generate": "pnpm --filter @price-monitor/db db:generate",
+    "db:migrate": "pnpm --filter @price-monitor/db db:migrate",
+    "db:start": "pnpm --filter @price-monitor/db db:start",
+    "db:watch": "pnpm --filter @price-monitor/db db:watch",
+    "db:stop": "pnpm --filter @price-monitor/db db:stop",
+    "db:down": "pnpm --filter @price-monitor/db db:down",
+    "check": "oxlint && oxfmt --write"
+  },
+  "dependencies": {
+    "@price-monitor/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@price-monitor/config": "workspace:*",
+    "@types/node": "catalog:",
+    "oxfmt": "^0.46.0",
+    "oxlint": "^1.61.0",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@10.33.0"
+}
