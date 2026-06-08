@@ -17,7 +17,13 @@ import { apiClient } from "../lib/api-client";
 import { dashboardQueryOptions, invalidateDashboard } from "../lib/queries";
 
 export const Route = createFileRoute("/")({
-  loader: ({ context }) => context.queryClient.ensureQueryData(dashboardQueryOptions()),
+  loader: async ({ context }) => {
+    try {
+      return await context.queryClient.ensureQueryData(dashboardQueryOptions());
+    } catch {
+      return undefined;
+    }
+  },
   component: HomeComponent,
 });
 
@@ -40,9 +46,23 @@ const formatDate = (value: string) =>
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const getDashboardErrorMessage = (error: unknown) => {
+  const message = getErrorMessage(error);
+
+  if (message.includes("Transport error")) {
+    return `${message}. Sprawdź, czy backend działa: pnpm dev:server albo pnpm dev.`;
+  }
+
+  return message;
+};
+
 function HomeComponent() {
+  const initialDashboard = Route.useLoaderData();
   const queryClient = useQueryClient();
-  const dashboardQuery = useQuery(dashboardQueryOptions());
+  const dashboardQuery = useQuery({
+    ...dashboardQueryOptions(),
+    initialData: initialDashboard,
+  });
 
   const checkPriceMutation = useMutation({
     mutationFn: apiClient.checkPrice,
@@ -73,13 +93,14 @@ function HomeComponent() {
   };
 
   if (dashboardQuery.isPending) {
-    return <DashboardShell state="Ładowanie danych z Effect HTTP API..." />;
+    return <DashboardShell />;
   }
 
   if (dashboardQuery.isError) {
     return (
       <DashboardShell
-        state={`Nie udało się pobrać danych: ${getErrorMessage(dashboardQuery.error)}`}
+        error={getDashboardErrorMessage(dashboardQuery.error)}
+        onRetry={() => dashboardQuery.refetch()}
       />
     );
   }
@@ -129,14 +150,27 @@ function HomeComponent() {
   );
 }
 
-function DashboardShell({ state }: { readonly state: string }) {
+function DashboardShell({
+  error,
+  onRetry,
+}: {
+  readonly error?: string;
+  readonly onRetry?: () => void;
+}) {
   return (
     <main className="mx-auto grid min-h-[70svh] w-full max-w-7xl place-items-center px-4 py-10">
       <Card className="w-full max-w-lg border-primary/30 bg-primary/5">
         <CardHeader>
           <CardTitle>PricePulse</CardTitle>
-          <CardDescription>{state}</CardDescription>
+          <CardDescription>{error ?? "Ładowanie danych z Effect HTTP API..."}</CardDescription>
         </CardHeader>
+        {onRetry && (
+          <CardContent>
+            <Button type="button" onClick={onRetry}>
+              Spróbuj ponownie
+            </Button>
+          </CardContent>
+        )}
       </Card>
     </main>
   );

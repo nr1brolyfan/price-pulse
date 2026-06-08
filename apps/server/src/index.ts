@@ -64,11 +64,15 @@ const ApiLive = HttpApiBuilder.layer(PriceMonitorApi, {
   openapiPath: "/openapi.json",
 }).pipe(Layer.provide(ApiHandlersLive), HttpRouter.provideRequest(ServicesLive));
 
+const allowedOrigins = Array.from(
+  new Set([serverConfig.corsOrigin, "http://localhost:3001", "http://127.0.0.1:3001"]),
+);
+
 const RouterLive = Layer.mergeAll(
   HttpRouter.cors({
     allowedHeaders: ["content-type"],
     allowedMethods: ["GET", "POST", "OPTIONS"],
-    allowedOrigins: [serverConfig.corsOrigin],
+    allowedOrigins,
   }),
   ApiLive,
 );
