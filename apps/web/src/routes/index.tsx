@@ -71,8 +71,11 @@ const getDashboardErrorMessage = (error: unknown) => {
   return message;
 };
 
+const productCardId = (productId: string) => `product-card-${productId}`;
+
 type AlertNotification = {
   readonly alertId: string;
+  readonly productId: string;
   readonly productName: string;
   readonly targetAmount: number;
   readonly triggeredAt: string;
@@ -118,6 +121,22 @@ function HomeComponent() {
       });
     },
   });
+
+  const showProduct = (productId: string) => {
+    document.getElementById(productCardId(productId))?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+    setHighlightedProductIds((current) => new Set([...current, productId]));
+
+    window.setTimeout(() => {
+      setHighlightedProductIds((current) => {
+        const next = new Set(current);
+        next.delete(productId);
+        return next;
+      });
+    }, 8000);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -170,6 +189,7 @@ function HomeComponent() {
     const productName = product?.name ?? latest.productId;
     const notification = {
       alertId: latest.id,
+      productId: latest.productId,
       productName,
       targetAmount: latest.targetPrice.amount,
       triggeredAt: latest.triggeredAt ?? latest.createdAt,
@@ -180,6 +200,10 @@ function HomeComponent() {
     setHighlightedProductIds((current) => new Set([...current, ...productIds]));
 
     toast.warning("Alert cenowy uruchomiony", {
+      action: {
+        label: "Pokaż",
+        onClick: () => showProduct(latest.productId),
+      },
       description:
         newAlerts.length === 1
           ? `${productName} osiągnął próg ${formatMoney(latest.targetPrice.amount)}.`
@@ -275,7 +299,13 @@ function HomeComponent() {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 lg:py-8">
       <Hero dashboard={dashboard} />
 
-      {latestAlert && <AlertBanner notification={latestAlert} soundReady={alertSoundReady} />}
+      {latestAlert && (
+        <AlertBanner
+          notification={latestAlert}
+          soundReady={alertSoundReady}
+          onShowProduct={() => showProduct(latestAlert.productId)}
+        />
+      )}
 
       {(createAlertMutation.isError || deleteAlertMutation.isError) && (
         <Card className="border-destructive/40 bg-destructive/10">
@@ -423,9 +453,11 @@ function Metric({
 
 function AlertBanner({
   notification,
+  onShowProduct,
   soundReady,
 }: {
   readonly notification: AlertNotification;
+  readonly onShowProduct: () => void;
   readonly soundReady: boolean;
 }) {
   return (
@@ -446,9 +478,14 @@ function AlertBanner({
             {formatDate(notification.triggeredAt)}.
           </p>
         </div>
-        <span className="w-fit border border-emerald-400/30 bg-background/50 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-emerald-300">
-          {soundReady ? "Dźwięk aktywny" : "Dźwięk po interakcji"}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-fit border border-emerald-400/30 bg-background/50 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-emerald-300">
+            {soundReady ? "Dźwięk aktywny" : "Dźwięk po interakcji"}
+          </span>
+          <Button type="button" size="sm" variant="outline" onClick={onShowProduct}>
+            Pokaż produkt
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -481,11 +518,12 @@ function ProductCard({
 
   return (
     <Card
+      id={productCardId(product.id)}
       className={`min-w-0 overflow-hidden p-0 transition-all duration-500 ${
         isAlerting
           ? "border-emerald-400/70 bg-emerald-500/10 shadow-[0_0_42px_rgba(16,185,129,0.22)] ring-1 ring-emerald-400/50"
           : "border-primary/10 bg-card/80"
-      }`}
+      } scroll-mt-28`}
     >
       <div className="grid min-w-0 gap-5 p-4 lg:p-6">
         <header className="grid min-w-0 gap-4 md:grid-cols-[128px_minmax(0,1fr)_auto] md:items-start">
