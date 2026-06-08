@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@price-monitor/ui/components/card";
 import { Input } from "@price-monitor/ui/components/input";
-import type { Alert, Dashboard, DomainEvent, Product } from "@price-monitor/api";
+import type { Alert, Dashboard, Product } from "@price-monitor/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Activity, Bell, RefreshCw, TrendingDown, Zap } from "lucide-react";
@@ -254,11 +254,6 @@ function HomeComponent() {
             onCreateAlert={(event) => createAlert(event, product.id)}
           />
         ))}
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <EventsCard events={dashboard.events} />
-        <AlertsCard alerts={dashboard.alerts} products={dashboard.products} />
       </section>
     </main>
   );
@@ -841,77 +836,5 @@ function MonitoringPanel({
         </div>
       </div>
     </section>
-  );
-}
-
-function EventsCard({ events }: { readonly events: ReadonlyArray<DomainEvent> }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Zdarzenia systemowe</CardTitle>
-        <CardDescription>Automatyczny monitoring, zmiany cen i alerty</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-2">
-        {events.map((event) => (
-          <div key={event.id} className="border-l-2 border-primary/50 pl-3 text-sm">
-            <p className="font-medium">{event.message}</p>
-            <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              {event.type} · {formatDate(event.createdAt)}
-            </p>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function AlertsCard({
-  alerts,
-  products,
-}: {
-  readonly alerts: ReadonlyArray<Alert>;
-  readonly products: ReadonlyArray<Product>;
-}) {
-  const productName = (productId: string) =>
-    products.find((product) => product.id === productId)?.name ?? productId;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Alerty cenowe</CardTitle>
-        <CardDescription>{alerts.length} reguły monitorowania</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-2">
-        {alerts.map((alert) => (
-          <div
-            key={alert.id}
-            className={`border p-3 text-sm ${
-              alert.triggeredAt
-                ? "border-emerald-400/40 bg-emerald-400/10 shadow-[0_0_18px_rgba(16,185,129,0.12)]"
-                : "bg-muted/20"
-            }`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-medium">{productName(alert.productId)}</p>
-                <p className="text-muted-foreground">
-                  Próg: {formatMoney(alert.targetPrice.amount)}
-                </p>
-              </div>
-              {alert.triggeredAt && (
-                <span className="border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-emerald-300">
-                  ALERT
-                </span>
-              )}
-            </div>
-            <p
-              className={alert.triggeredAt ? "mt-2 text-emerald-300" : "mt-2 text-muted-foreground"}
-            >
-              {alert.triggeredAt ? `Uruchomiony ${formatDate(alert.triggeredAt)}` : "Aktywny"}
-            </p>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
   );
 }
