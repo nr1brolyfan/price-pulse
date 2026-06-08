@@ -654,6 +654,9 @@ function ProductCard({
 }
 
 function OffersPanel({ product }: { readonly product: Product }) {
+  const sortedOffers = [...product.offers].sort(
+    (left, right) => left.lastPrice.amount - right.lastPrice.amount,
+  );
   const bestOffer = product.offers.reduce((best, offer) =>
     offer.lastPrice.amount < best.lastPrice.amount ? offer : best,
   );
@@ -671,7 +674,7 @@ function OffersPanel({ product }: { readonly product: Product }) {
       </div>
 
       <div className="divide-y">
-        {product.offers.map((offer) => (
+        {sortedOffers.map((offer) => (
           <div key={offer.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-3">
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
