@@ -443,9 +443,9 @@ function PriceChart({ product }: { readonly product: Product }) {
   const spread = Math.max(1, maxRaw - minRaw);
   const min = Math.max(0, minRaw - spread * 0.12);
   const max = maxRaw + spread * 0.12;
-  const width = 760;
+  const width = 1200;
   const height = 300;
-  const padding = { top: 20, right: 28, bottom: 54, left: 78 };
+  const padding = { top: 20, right: 34, bottom: 54, left: 78 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
 
@@ -503,7 +503,11 @@ function PriceChart({ product }: { readonly product: Product }) {
           </div>
         )}
 
-        <svg className="h-72 w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} role="img">
+        <svg
+          className="block h-auto w-full overflow-visible"
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+        >
           <title>Wykres historii ceny dla {product.name}</title>
           <defs>
             <linearGradient id={`price-area-${product.id}`} x1="0" x2="0" y1="0" y2="1">
