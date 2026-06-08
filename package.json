@@ -22,11 +22,7 @@
     "db:down": "pnpm --filter @price-monitor/db db:down",
     "check": "oxlint && oxfmt --write"
   },
-  "dependencies": {
-    "@price-monitor/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@price-monitor/config": "workspace:*",
     "@types/node": "catalog:",

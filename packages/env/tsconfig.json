@@ -1,3 +1,0 @@
-{
-  "extends": "@price-monitor/config/tsconfig.base.json"
-}

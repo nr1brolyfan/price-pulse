@@ -10,6 +10,7 @@
     }
   },
   "scripts": {
+    "check-types": "tsc --noEmit",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
@@ -20,11 +21,9 @@
     "db:down": "docker compose down"
   },
   "dependencies": {
-    "@price-monitor/env": "workspace:*",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
-    "pg": "^8.17.1",
-    "zod": "catalog:"
+    "pg": "^8.17.1"
   },
   "devDependencies": {
     "@price-monitor/config": "workspace:*",

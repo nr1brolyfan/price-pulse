@@ -1,20 +1,19 @@
 {
-  "name": "@price-monitor/env",
+  "name": "@price-monitor/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    "./server": "./src/server.ts",
-    "./web": "./src/web.ts"
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@t3-oss/env-core": "^0.13.1",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
+    "effect": "4.0.0-beta.78"
   },
   "devDependencies": {
     "@price-monitor/config": "workspace:*",
-    "@types/node": "catalog:",
     "typescript": "catalog:"
   }
 }

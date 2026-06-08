@@ -1,31 +1,80 @@
-import { env } from "@price-monitor/env/server";
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { logger } from "hono/logger";
+import { PriceMonitorApi } from "@price-monitor/api";
+import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
+import { Effect, Layer } from "effect";
+import { HttpMiddleware, HttpRouter } from "effect/unstable/http";
+import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { createServer } from "node:http";
 
-const app = new Hono();
+import { serverConfig } from "./config";
+import { PriceMonitor, ServicesLive } from "./services";
 
-app.use(logger());
-app.use(
-  "/*",
-  cors({
-    origin: env.CORS_ORIGIN,
-    allowMethods: ["GET", "POST", "OPTIONS"],
+const ApiHandlersLive = HttpApiBuilder.group(PriceMonitorApi, "monitor", (handlers) =>
+  handlers
+    .handle("health", () =>
+      Effect.gen(function* () {
+        const monitor = yield* PriceMonitor;
+        return yield* monitor.health;
+      }),
+    )
+    .handle("dashboard", () =>
+      Effect.gen(function* () {
+        const monitor = yield* PriceMonitor;
+        return yield* monitor.dashboard;
+      }),
+    )
+    .handle("products", () =>
+      Effect.gen(function* () {
+        const monitor = yield* PriceMonitor;
+        return yield* monitor.listProducts;
+      }),
+    )
+    .handle("product", ({ params }) =>
+      Effect.gen(function* () {
+        const monitor = yield* PriceMonitor;
+        return yield* monitor.getProduct(params.productId);
+      }),
+    )
+    .handle("checkPrice", ({ params }) =>
+      Effect.gen(function* () {
+        const monitor = yield* PriceMonitor;
+        return yield* monitor.checkPrice(params.productId);
+      }),
+    )
+    .handle("alerts", () =>
+      Effect.gen(function* () {
+        const monitor = yield* PriceMonitor;
+        return yield* monitor.listAlerts;
+      }),
+    )
+    .handle("createAlert", ({ payload }) =>
+      Effect.gen(function* () {
+        const monitor = yield* PriceMonitor;
+        return yield* monitor.createAlert(payload);
+      }),
+    )
+    .handle("events", () =>
+      Effect.gen(function* () {
+        const monitor = yield* PriceMonitor;
+        return yield* monitor.listEvents;
+      }),
+    ),
+);
+
+const ApiLive = HttpApiBuilder.layer(PriceMonitorApi, {
+  openapiPath: "/openapi.json",
+}).pipe(Layer.provide(ApiHandlersLive), HttpRouter.provideRequest(ServicesLive));
+
+const RouterLive = Layer.mergeAll(
+  HttpRouter.cors({
+    allowedHeaders: ["content-type"],
+    allowedMethods: ["GET", "POST", "OPTIONS"],
+    allowedOrigins: [serverConfig.corsOrigin],
   }),
+  ApiLive,
 );
 
-app.get("/", (c) => {
-  return c.text("OK");
-});
+const ServerLive = HttpRouter.serve(RouterLive, {
+  middleware: HttpMiddleware.logger,
+}).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port: serverConfig.port })));
 
-import { serve } from "@hono/node-server";
-
-serve(
-  {
-    fetch: app.fetch,
-    port: 3000,
-  },
-  (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
-  },
-);
+NodeRuntime.runMain(Layer.launch(ServerLive));

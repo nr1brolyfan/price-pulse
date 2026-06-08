@@ -4,17 +4,19 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "check-types": "tsr generate && tsc --noEmit",
     "serve": "vite preview",
     "dev": "vite dev"
   },
   "dependencies": {
-    "@price-monitor/env": "workspace:*",
+    "@price-monitor/api": "workspace:*",
     "@price-monitor/ui": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/react-query": "^5.99.0",
     "@tanstack/react-router": "^1.168.22",
     "@tanstack/react-start": "^1.167.41",
     "dotenv": "catalog:",
+    "effect": "4.0.0-beta.78",
     "lucide-react": "^1.8.0",
     "next-themes": "catalog:",
     "react": "catalog:",
@@ -26,6 +28,7 @@
   "devDependencies": {
     "@price-monitor/config": "workspace:*",
     "@tanstack/react-router-devtools": "^1.166.13",
+    "@tanstack/router-cli": "^1.167.17",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "catalog:",

@@ -1,10 +1,9 @@
-import { env } from "@price-monitor/env/server";
 import { drizzle } from "drizzle-orm/node-postgres";
 
 import * as schema from "./schema";
 
-export function createDb() {
-  return drizzle(env.DATABASE_URL, { schema });
+export function createDb(databaseUrl: string) {
+  return drizzle(databaseUrl, { schema });
 }
 
-export const db = createDb();
+export { schema };
