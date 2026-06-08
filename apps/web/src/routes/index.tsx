@@ -11,7 +11,8 @@ import type { Alert, Dashboard, DomainEvent, Product } from "@price-monitor/api"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Activity, Bell, RefreshCw, TrendingDown, Zap } from "lucide-react";
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { apiClient } from "../lib/api-client";
 import { dashboardQueryOptions, invalidateDashboard } from "../lib/queries";
@@ -62,27 +63,137 @@ const getDashboardErrorMessage = (error: unknown) => {
   return message;
 };
 
+type AlertNotification = {
+  readonly productName: string;
+  readonly targetAmount: number;
+  readonly triggeredAt: string;
+};
+
 function HomeComponent() {
   const initialDashboard = Route.useLoaderData();
-  const checkingProductIdsRef = useRef(new Set<string>());
-  const [checkingProductIds, setCheckingProductIds] = useState<ReadonlySet<string>>(
+  const alertSoundReadyRef = useRef(false);
+  const knownTriggeredAlertIdsRef = useRef<Set<string> | undefined>(undefined);
+  const [alertSoundReady, setAlertSoundReady] = useState(false);
+  const [highlightedProductIds, setHighlightedProductIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [latestAlert, setLatestAlert] = useState<AlertNotification | undefined>(undefined);
   const queryClient = useQueryClient();
   const dashboardQuery = useQuery({
     ...dashboardQueryOptions(),
     initialData: initialDashboard,
   });
 
-  const checkPriceMutation = useMutation({
-    mutationFn: apiClient.checkPrice,
-    onSuccess: () => queryClient.invalidateQueries(invalidateDashboard),
-  });
-
   const createAlertMutation = useMutation({
     mutationFn: apiClient.createAlert,
     onSuccess: () => queryClient.invalidateQueries(invalidateDashboard),
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const enableSound = () => {
+      alertSoundReadyRef.current = true;
+      setAlertSoundReady(true);
+    };
+
+    window.addEventListener("pointerdown", enableSound, { once: true });
+    window.addEventListener("keydown", enableSound, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", enableSound);
+      window.removeEventListener("keydown", enableSound);
+    };
+  }, []);
+
+  useEffect(() => {
+    const dashboard = dashboardQuery.data;
+
+    if (!dashboard) {
+      return;
+    }
+
+    const triggeredAlerts = dashboard.alerts.filter((alert) => alert.triggeredAt);
+    const currentTriggeredIds = new Set(triggeredAlerts.map((alert) => alert.id));
+    const knownTriggeredIds = knownTriggeredAlertIdsRef.current;
+
+    if (!knownTriggeredIds) {
+      knownTriggeredAlertIdsRef.current = currentTriggeredIds;
+      return;
+    }
+
+    const newAlerts = triggeredAlerts.filter((alert) => !knownTriggeredIds.has(alert.id));
+    knownTriggeredAlertIdsRef.current = currentTriggeredIds;
+
+    if (newAlerts.length === 0) {
+      return;
+    }
+
+    const latest = newAlerts.reduce((latestAlert, alert) =>
+      (alert.triggeredAt ?? alert.createdAt) > (latestAlert.triggeredAt ?? latestAlert.createdAt)
+        ? alert
+        : latestAlert,
+    );
+    const product = dashboard.products.find((item) => item.id === latest.productId);
+    const productName = product?.name ?? latest.productId;
+    const notification = {
+      productName,
+      targetAmount: latest.targetPrice.amount,
+      triggeredAt: latest.triggeredAt ?? latest.createdAt,
+    };
+    const productIds = new Set(newAlerts.map((alert) => alert.productId));
+
+    setLatestAlert(notification);
+    setHighlightedProductIds((current) => new Set([...current, ...productIds]));
+
+    toast.warning("Alert cenowy uruchomiony", {
+      description:
+        newAlerts.length === 1
+          ? `${productName} osiągnął próg ${formatMoney(latest.targetPrice.amount)}.`
+          : `${productName} osiągnął próg ${formatMoney(latest.targetPrice.amount)} i są ${
+              newAlerts.length - 1
+            } kolejne alerty.`,
+      duration: 7000,
+    });
+
+    if (alertSoundReadyRef.current && typeof window !== "undefined" && window.AudioContext) {
+      try {
+        const context = new AudioContext();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(880, context.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(660, context.currentTime + 0.18);
+        gain.gain.setValueAtTime(0.0001, context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.14, context.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.onended = () => {
+          void context.close();
+        };
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.24);
+      } catch {
+        // Browsers can still block audio in some autoplay/privacy modes.
+      }
+    }
+
+    window.setTimeout(() => {
+      setHighlightedProductIds((current) => {
+        const next = new Set(current);
+
+        for (const productId of productIds) {
+          next.delete(productId);
+        }
+
+        return next;
+      });
+    }, 8000);
+  }, [dashboardQuery.data]);
 
   const createAlert = (event: FormEvent<HTMLFormElement>, productId: string) => {
     event.preventDefault();
@@ -100,22 +211,6 @@ function HomeComponent() {
         onSuccess: () => form.reset(),
       },
     );
-  };
-
-  const checkPrice = (productId: string) => {
-    if (checkingProductIdsRef.current.has(productId)) {
-      return;
-    }
-
-    checkingProductIdsRef.current.add(productId);
-    setCheckingProductIds(new Set(checkingProductIdsRef.current));
-
-    checkPriceMutation.mutate(productId, {
-      onSettled: () => {
-        checkingProductIdsRef.current.delete(productId);
-        setCheckingProductIds(new Set(checkingProductIdsRef.current));
-      },
-    });
   };
 
   if (dashboardQuery.isPending) {
@@ -137,13 +232,11 @@ function HomeComponent() {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 lg:py-8">
       <Hero dashboard={dashboard} />
 
-      {(checkPriceMutation.isError || createAlertMutation.isError) && (
+      {latestAlert && <AlertBanner notification={latestAlert} soundReady={alertSoundReady} />}
+
+      {createAlertMutation.isError && (
         <Card className="border-destructive/40 bg-destructive/10">
-          <CardContent>
-            {checkPriceMutation.error
-              ? getErrorMessage(checkPriceMutation.error)
-              : getErrorMessage(createAlertMutation.error)}
-          </CardContent>
+          <CardContent>{getErrorMessage(createAlertMutation.error)}</CardContent>
         </Card>
       )}
 
@@ -152,13 +245,12 @@ function HomeComponent() {
           <ProductCard
             key={product.id}
             alerts={dashboard.alerts.filter((alert) => alert.productId === product.id)}
-            isChecking={checkingProductIds.has(product.id)}
+            isAlerting={highlightedProductIds.has(product.id)}
             isCreatingAlert={
               createAlertMutation.isPending &&
               createAlertMutation.variables?.productId === product.id
             }
             product={product}
-            onCheckPrice={() => checkPrice(product.id)}
             onCreateAlert={(event) => createAlert(event, product.id)}
           />
         ))}
@@ -284,18 +376,49 @@ function Metric({
   );
 }
 
+function AlertBanner({
+  notification,
+  soundReady,
+}: {
+  readonly notification: AlertNotification;
+  readonly soundReady: boolean;
+}) {
+  return (
+    <Card className="border-emerald-400/60 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.26),_transparent_42%),linear-gradient(135deg,_rgba(16,185,129,0.14),_rgba(20,184,166,0.05))] py-0 shadow-[0_0_46px_rgba(16,185,129,0.18)] ring-1 ring-emerald-400/30">
+      <CardContent className="grid gap-4 p-4 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
+        <div className="grid size-12 place-items-center border border-emerald-400/60 bg-emerald-400/15 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.28)]">
+          <Bell className="size-5 animate-pulse" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-emerald-300">
+            Alert cenowy uruchomiony
+          </p>
+          <h3 className="mt-1 truncate text-xl font-semibold tracking-tight">
+            {notification.productName}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Cena osiągnęła próg {formatMoney(notification.targetAmount)} o{" "}
+            {formatDate(notification.triggeredAt)}.
+          </p>
+        </div>
+        <span className="w-fit border border-emerald-400/30 bg-background/50 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-emerald-300">
+          {soundReady ? "Dźwięk aktywny" : "Dźwięk po interakcji"}
+        </span>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ProductCard({
   alerts,
-  isChecking,
+  isAlerting,
   isCreatingAlert,
-  onCheckPrice,
   onCreateAlert,
   product,
 }: {
   readonly alerts: ReadonlyArray<Alert>;
-  readonly isChecking: boolean;
+  readonly isAlerting: boolean;
   readonly isCreatingAlert: boolean;
-  readonly onCheckPrice: () => void;
   readonly onCreateAlert: (event: FormEvent<HTMLFormElement>) => void;
   readonly product: Product;
 }) {
@@ -306,7 +429,13 @@ function ProductCard({
   const triggeredAlerts = alerts.filter((alert) => alert.triggeredAt);
 
   return (
-    <Card className="min-w-0 overflow-hidden border-primary/10 bg-card/80 p-0">
+    <Card
+      className={`min-w-0 overflow-hidden p-0 transition-all duration-500 ${
+        isAlerting
+          ? "border-emerald-400/70 bg-emerald-500/10 shadow-[0_0_42px_rgba(16,185,129,0.22)] ring-1 ring-emerald-400/50"
+          : "border-primary/10 bg-card/80"
+      }`}
+    >
       <div className="grid min-w-0 gap-5 p-4 lg:p-6">
         <header className="grid min-w-0 gap-4 md:grid-cols-[128px_minmax(0,1fr)_auto] md:items-start">
           <div className="h-32 w-32 overflow-hidden border bg-muted/30">
@@ -338,6 +467,11 @@ function ProductCard({
               <span className="border bg-muted/30 px-2 py-1">
                 {activeAlerts.length} aktywnych alertów
               </span>
+              {isAlerting && (
+                <span className="border border-emerald-400/40 bg-emerald-400/15 px-2 py-1 text-emerald-300">
+                  nowy alert
+                </span>
+              )}
             </div>
           </div>
 
@@ -356,12 +490,19 @@ function ProductCard({
             {drop > 0 && (
               <p className="mt-1 text-xs text-emerald-500">Spadek od startu: {formatMoney(drop)}</p>
             )}
-            <Button type="button" disabled={isChecking} onClick={onCheckPrice}>
-              <RefreshCw className={isChecking ? "animate-spin" : ""} />
-              {isChecking ? "Pobieranie..." : "Pobierz cenę"}
-            </Button>
           </div>
         </header>
+
+        {isAlerting && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
+            <span className="inline-flex items-center gap-2 font-medium">
+              <Bell className="size-4 animate-pulse" /> Alert dla tego produktu właśnie odpalił
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-emerald-300">
+              live update
+            </span>
+          </div>
+        )}
 
         <PriceChart product={product} />
 
@@ -683,12 +824,18 @@ function MonitoringPanel({
           {triggeredAlerts.slice(0, 3).map((alert) => (
             <div
               key={alert.id}
-              className="flex items-center justify-between gap-3 border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm"
+              className="grid gap-2 border border-emerald-400/40 bg-emerald-400/10 px-3 py-3 text-sm shadow-[0_0_24px_rgba(16,185,129,0.12)]"
             >
-              <span className="text-emerald-500">
-                Uruchomiony {alert.triggeredAt ? formatDate(alert.triggeredAt) : ""}
-              </span>
-              <span className="font-semibold">{formatMoney(alert.targetPrice.amount)}</span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 font-medium text-emerald-300">
+                  <Bell className="size-4" /> Alert uruchomiony
+                </span>
+                <span className="font-semibold">{formatMoney(alert.targetPrice.amount)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Wykryto {alert.triggeredAt ? formatDate(alert.triggeredAt) : "teraz"}. Produkt
+                wymaga uwagi.
+              </p>
             </div>
           ))}
         </div>
@@ -702,7 +849,7 @@ function EventsCard({ events }: { readonly events: ReadonlyArray<DomainEvent> })
     <Card>
       <CardHeader>
         <CardTitle>Zdarzenia systemowe</CardTitle>
-        <CardDescription>Automatyczny monitoring i ręczne pulle</CardDescription>
+        <CardDescription>Automatyczny monitoring, zmiany cen i alerty</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2">
         {events.map((event) => (
@@ -736,10 +883,30 @@ function AlertsCard({
       </CardHeader>
       <CardContent className="grid gap-2">
         {alerts.map((alert) => (
-          <div key={alert.id} className="border bg-muted/20 p-3 text-sm">
-            <p className="font-medium">{productName(alert.productId)}</p>
-            <p className="text-muted-foreground">Próg: {formatMoney(alert.targetPrice.amount)}</p>
-            <p className={alert.triggeredAt ? "text-emerald-500" : "text-muted-foreground"}>
+          <div
+            key={alert.id}
+            className={`border p-3 text-sm ${
+              alert.triggeredAt
+                ? "border-emerald-400/40 bg-emerald-400/10 shadow-[0_0_18px_rgba(16,185,129,0.12)]"
+                : "bg-muted/20"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium">{productName(alert.productId)}</p>
+                <p className="text-muted-foreground">
+                  Próg: {formatMoney(alert.targetPrice.amount)}
+                </p>
+              </div>
+              {alert.triggeredAt && (
+                <span className="border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-emerald-300">
+                  ALERT
+                </span>
+              )}
+            </div>
+            <p
+              className={alert.triggeredAt ? "mt-2 text-emerald-300" : "mt-2 text-muted-foreground"}
+            >
               {alert.triggeredAt ? `Uruchomiony ${formatDate(alert.triggeredAt)}` : "Aktywny"}
             </p>
           </div>
