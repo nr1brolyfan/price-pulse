@@ -36,7 +36,7 @@ export const Route = createFileRoute("/")({
   component: HomeComponent,
 });
 
-const moneyFormatter = new Intl.NumberFormat("pl-PL", {
+const moneyFormatter = new Intl.NumberFormat("en-US", {
   currency: "PLN",
   maximumFractionDigits: 2,
   style: "currency",
@@ -44,14 +44,14 @@ const moneyFormatter = new Intl.NumberFormat("pl-PL", {
 
 const formatMoney = (amount: number) => moneyFormatter.format(amount);
 
-const axisMoneyFormatter = new Intl.NumberFormat("pl-PL", {
+const axisMoneyFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-const formatAxisMoney = (amount: number) => `${axisMoneyFormatter.format(amount)} zł`;
+const formatAxisMoney = (amount: number) => `${axisMoneyFormatter.format(amount)} PLN`;
 
 const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("pl-PL", {
+  new Intl.DateTimeFormat("en-US", {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
@@ -65,7 +65,7 @@ const getDashboardErrorMessage = (error: unknown) => {
   const message = getErrorMessage(error);
 
   if (message.includes("Transport error")) {
-    return `${message}. Sprawdź, czy backend działa: pnpm dev:server albo pnpm dev.`;
+    return `${message}. Check whether the backend is running: pnpm dev:server or pnpm dev.`;
   }
 
   return message;
@@ -108,7 +108,7 @@ function HomeComponent() {
   const deleteAlertMutation = useMutation({
     mutationFn: apiClient.deleteAlert,
     onError: (error) => {
-      toast.error("Nie udało się usunąć alertu", {
+      toast.error("Failed to delete alert", {
         description: getErrorMessage(error),
       });
     },
@@ -120,8 +120,8 @@ function HomeComponent() {
         return next;
       });
       setLatestAlert((current) => (current?.alertId === alert.id ? undefined : current));
-      toast.success("Alert usunięty", {
-        description: `Usunięto próg ${formatMoney(alert.targetPrice.amount)}.`,
+      toast.success("Alert deleted", {
+        description: `Removed threshold ${formatMoney(alert.targetPrice.amount)}.`,
       });
     },
   });
@@ -204,17 +204,17 @@ function HomeComponent() {
     setLatestAlert(notification);
     setHighlightedProductIds((current) => new Set([...current, ...productIds]));
 
-    toast.warning("Alert cenowy uruchomiony", {
+    toast.warning("Price alert triggered", {
       action: {
-        label: "Pokaż",
+        label: "Show",
         onClick: () => showProduct(latest.productId),
       },
       description:
         newAlerts.length === 1
-          ? `${productName} osiągnął próg ${formatMoney(latest.targetPrice.amount)}.`
-          : `${productName} osiągnął próg ${formatMoney(latest.targetPrice.amount)} i są ${
+          ? `${productName} reached the ${formatMoney(latest.targetPrice.amount)} threshold.`
+          : `${productName} reached the ${formatMoney(latest.targetPrice.amount)} threshold and ${
               newAlerts.length - 1
-            } kolejne alerty.`,
+            } more alerts were triggered.`,
       duration: 7000,
     });
 
@@ -313,11 +313,11 @@ function HomeComponent() {
   }
 
   const dashboard = dashboardQuery.data;
-  const normalizedProductSearch = productSearch.trim().toLocaleLowerCase("pl-PL");
+  const normalizedProductSearch = productSearch.trim().toLocaleLowerCase("en-US");
   const visibleProducts = normalizedProductSearch
     ? dashboard.products.filter((product) =>
         `${product.name} ${product.category}`
-          .toLocaleLowerCase("pl-PL")
+          .toLocaleLowerCase("en-US")
           .includes(normalizedProductSearch),
       )
     : dashboard.products;
@@ -353,15 +353,15 @@ function HomeComponent() {
       <section className="grid min-w-0 gap-5">
         <div className="grid gap-3 border bg-muted/10 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div>
-            <h3 className="font-medium">Produkty</h3>
+            <h3 className="font-medium">Products</h3>
             <p className="text-xs text-muted-foreground">
-              Szczegóły, wykresy i monitoring są ukryte do czasu rozwinięcia karty.
+              Details, charts, and monitoring stay hidden until you expand a card.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Input
               className="w-56"
-              placeholder="Szukaj produktu..."
+              placeholder="Search products..."
               type="search"
               value={productSearch}
               onChange={(event) => setProductSearch(event.currentTarget.value)}
@@ -377,7 +377,7 @@ function HomeComponent() {
                 )
               }
             >
-              Rozwiń widoczne
+              Expand visible
             </Button>
             <Button
               type="button"
@@ -395,14 +395,14 @@ function HomeComponent() {
                 })
               }
             >
-              Zwiń widoczne
+              Collapse visible
             </Button>
           </div>
         </div>
 
         {visibleProducts.length === 0 && (
           <p className="border border-dashed bg-background/40 px-4 py-6 text-sm text-muted-foreground">
-            Brak produktów dla zapytania "{productSearch}".
+            No products found for "{productSearch}".
           </p>
         )}
 
@@ -441,12 +441,12 @@ function DashboardShell({
       <Card className="w-full max-w-lg border-primary/30 bg-primary/5">
         <CardHeader>
           <CardTitle>PricePulse</CardTitle>
-          <CardDescription>{error ?? "Ładowanie danych z Effect HTTP API..."}</CardDescription>
+          <CardDescription>{error ?? "Loading data from the Effect HTTP API..."}</CardDescription>
         </CardHeader>
         {onRetry && (
           <CardContent>
             <Button type="button" onClick={onRetry}>
-              Spróbuj ponownie
+              Try again
             </Button>
           </CardContent>
         )}
@@ -469,24 +469,24 @@ function Hero({ dashboard }: { readonly dashboard: Dashboard }) {
             <Zap className="size-3" /> Effect v4 HTTP API
           </div>
           <h2 className="max-w-3xl text-2xl font-semibold tracking-tight lg:text-4xl">
-            Monitoring cen z alertami
+            Price monitoring with alerts
           </h2>
         </div>
 
         <div className="grid min-w-0 gap-2 sm:grid-cols-3 lg:w-[520px]">
           <Metric
             icon={<Activity className="size-4" />}
-            label="Produkty"
+            label="Products"
             value={dashboard.products.length.toString()}
           />
           <Metric
             icon={<Bell className="size-4" />}
-            label="Aktywne alerty"
+            label="Active alerts"
             value={activeAlerts.toString()}
           />
           <Metric
             icon={<Bell className="size-4" />}
-            label="Uruchomione alerty"
+            label="Triggered alerts"
             value={triggeredAlerts.toString()}
           />
         </div>
@@ -534,22 +534,22 @@ function AlertBanner({
         </div>
         <div className="min-w-0">
           <p className="font-mono text-xs uppercase tracking-[0.24em] text-emerald-300">
-            Alert cenowy uruchomiony
+            Price alert triggered
           </p>
           <h3 className="mt-1 truncate text-xl font-semibold tracking-tight">
             {notification.productName}
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cena osiągnęła próg {formatMoney(notification.targetAmount)} o{" "}
+            Price reached the {formatMoney(notification.targetAmount)} threshold at{" "}
             {formatDate(notification.triggeredAt)}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-fit border border-emerald-400/30 bg-background/50 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-emerald-300">
-            {soundReady ? "Dźwięk aktywny" : "Dźwięk po interakcji"}
+            {soundReady ? "Sound enabled" : "Sound after interaction"}
           </span>
           <Button type="button" size="sm" variant="outline" onClick={onShowProduct}>
-            Pokaż produkt
+            Show product
           </Button>
         </div>
       </CardContent>
@@ -614,21 +614,21 @@ function ProductCard({
               {product.name}
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Ostatnia aktualizacja: {formatDate(product.updatedAt)}
+              Last updated: {formatDate(product.updatedAt)}
             </p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
               <span className="border bg-muted/30 px-2 py-1">
-                {product.offers.length} {product.offers.length === 1 ? "oferta" : "oferty"}
+                {product.offers.length} {product.offers.length === 1 ? "offer" : "offers"}
               </span>
               <span className="border bg-muted/30 px-2 py-1">
-                {product.history.length} pomiarów
+                {product.history.length} measurements
               </span>
               <span className="border bg-muted/30 px-2 py-1">
-                {activeAlerts.length} aktywnych alertów
+                {activeAlerts.length} active alerts
               </span>
               {isAlerting && (
                 <span className="border border-emerald-400/40 bg-emerald-400/15 px-2 py-1 text-emerald-300">
-                  nowy alert
+                  new alert
                 </span>
               )}
             </div>
@@ -637,21 +637,21 @@ function ProductCard({
           <div className="grid shrink-0 gap-3 text-left md:min-w-52 md:text-right">
             <div>
               <p className="font-mono text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                Aktualna cena
+                Current price
               </p>
               <p className="mt-1 text-3xl font-semibold">
                 {formatMoney(product.currentPrice.amount)}
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              Najniższa: {formatMoney(product.lowestPrice.amount)}
+              Lowest: {formatMoney(product.lowestPrice.amount)}
             </p>
             {drop > 0 && (
-              <p className="mt-1 text-xs text-emerald-500">Spadek od startu: {formatMoney(drop)}</p>
+              <p className="mt-1 text-xs text-emerald-500">Drop since start: {formatMoney(drop)}</p>
             )}
             <Button type="button" variant="outline" onClick={onToggleDetails}>
               {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-              {isExpanded ? "Zwiń szczegóły" : "Rozwiń szczegóły"}
+              {isExpanded ? "Collapse details" : "Expand details"}
             </Button>
           </div>
         </header>
@@ -661,7 +661,7 @@ function ProductCard({
             {isAlerting && (
               <div className="flex flex-wrap items-center justify-between gap-3 border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
                 <span className="inline-flex items-center gap-2 font-medium">
-                  <Bell className="size-4 animate-pulse" /> Alert dla tego produktu właśnie odpalił
+                  <Bell className="size-4 animate-pulse" /> An alert for this product just fired
                 </span>
                 <span className="font-mono text-[10px] uppercase tracking-wider text-emerald-300">
                   live update
@@ -703,11 +703,11 @@ function OffersPanel({ product }: { readonly product: Product }) {
     <section className="min-w-0 border bg-muted/10">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div>
-          <h4 className="font-medium">Oferty sklepów</h4>
-          <p className="text-xs text-muted-foreground">Porównanie ostatnio sprawdzonych cen</p>
+          <h4 className="font-medium">Store offers</h4>
+          <p className="text-xs text-muted-foreground">Compare recently checked prices</p>
         </div>
         <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-          {product.offers.length} pozycji
+          {product.offers.length} items
         </span>
       </div>
 
@@ -719,12 +719,12 @@ function OffersPanel({ product }: { readonly product: Product }) {
                 <p className="truncate font-medium">{offer.storeName}</p>
                 {offer.id === bestOffer.id && (
                   <span className="shrink-0 border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-500">
-                    najlepsza
+                    best
                   </span>
                 )}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Sprawdzone {formatDate(offer.lastCheckedAt)}
+                Checked {formatDate(offer.lastCheckedAt)}
               </p>
             </div>
             <p className="shrink-0 text-right text-lg font-semibold">
@@ -746,8 +746,8 @@ function PriceChart({ product }: { readonly product: Product }) {
   if (visibleHistory.length === 0) {
     return (
       <section className="min-w-0 border bg-muted/10 p-4">
-        <h4 className="font-medium">Historia ceny</h4>
-        <p className="mt-2 text-sm text-muted-foreground">Brak pomiarów dla tego produktu.</p>
+        <h4 className="font-medium">Price history</h4>
+        <p className="mt-2 text-sm text-muted-foreground">No measurements for this product.</p>
       </section>
     );
   }
@@ -798,8 +798,10 @@ function PriceChart({ product }: { readonly product: Product }) {
     <section className="min-w-0 border bg-[linear-gradient(180deg,_hsl(var(--muted)/0.22),_transparent)] p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h4 className="font-medium">Historia ceny</h4>
-          <p className="text-xs text-muted-foreground">Ostatnie {visibleHistory.length} pomiarów</p>
+          <h4 className="font-medium">Price history</h4>
+          <p className="text-xs text-muted-foreground">
+            Latest {visibleHistory.length} measurements
+          </p>
         </div>
         <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground">PLN</p>
       </div>
@@ -823,7 +825,7 @@ function PriceChart({ product }: { readonly product: Product }) {
           viewBox={`0 0 ${width} ${height}`}
           role="img"
         >
-          <title>Wykres historii ceny dla {product.name}</title>
+          <title>Price history chart for {product.name}</title>
           <defs>
             <linearGradient id={`price-area-${product.id}`} x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
@@ -883,7 +885,7 @@ function PriceChart({ product }: { readonly product: Product }) {
             transform={`rotate(-90 18 ${padding.top + plotHeight / 2})`}
             className="fill-muted-foreground text-[11px] uppercase tracking-wider"
           >
-            Cena (PLN)
+            Price (PLN)
           </text>
           <text
             x={padding.left + plotWidth / 2}
@@ -891,7 +893,7 @@ function PriceChart({ product }: { readonly product: Product }) {
             textAnchor="middle"
             className="fill-muted-foreground text-[11px] uppercase tracking-wider"
           >
-            Data pomiaru
+            Measurement date
           </text>
 
           {xTicks.map(({ point, x }) => (
@@ -965,7 +967,7 @@ function MonitoringPanel({
     <section className="min-w-0 border bg-muted/10">
       <div className="border-b px-4 py-3">
         <h4 className="font-medium">Monitoring</h4>
-        <p className="text-xs text-muted-foreground">Alerty cenowe dla tego produktu</p>
+        <p className="text-xs text-muted-foreground">Price alerts for this product</p>
       </div>
 
       <div className="grid gap-4 p-4">
@@ -979,14 +981,14 @@ function MonitoringPanel({
             type="number"
           />
           <Button type="submit" variant="outline" disabled={isCreatingAlert}>
-            Dodaj alert
+            Add alert
           </Button>
         </form>
 
         <div className="grid gap-2">
           {activeAlerts.length === 0 && triggeredAlerts.length === 0 ? (
             <p className="border border-dashed bg-background/40 px-3 py-3 text-sm text-muted-foreground">
-              Brak alertów. Ustaw próg ceny, a system zapisze regułę monitorowania.
+              No alerts yet. Set a price threshold and the system will save the monitoring rule.
             </p>
           ) : null}
 
@@ -996,7 +998,7 @@ function MonitoringPanel({
               className="flex items-center justify-between gap-3 border bg-background/50 px-3 py-2 text-sm"
             >
               <div className="min-w-0">
-                <p className="text-muted-foreground">Aktywny próg</p>
+                <p className="text-muted-foreground">Active threshold</p>
                 <p className="font-semibold">{formatMoney(alert.targetPrice.amount)}</p>
               </div>
               <Button
@@ -1006,7 +1008,7 @@ function MonitoringPanel({
                 disabled={isDeletingAlert && deletingAlertId === alert.id}
                 onClick={() => onDeleteAlert(alert.id)}
               >
-                {isDeletingAlert && deletingAlertId === alert.id ? "Usuwanie..." : "Usuń"}
+                {isDeletingAlert && deletingAlertId === alert.id ? "Deleting..." : "Delete"}
               </Button>
             </div>
           ))}
@@ -1049,25 +1051,24 @@ function TriggeredAlertsSummary({
       <div className="flex flex-wrap items-center justify-between gap-3 border border-emerald-400/35 bg-emerald-400/10 px-3 py-2 text-sm shadow-[0_0_18px_rgba(16,185,129,0.1)]">
         <div className="min-w-0">
           <p className="inline-flex items-center gap-2 font-medium text-emerald-300">
-            <Bell className="size-4" /> {triggeredAlerts.length} uruchomione alerty
+            <Bell className="size-4" /> {triggeredAlerts.length}{" "}
+            {triggeredAlerts.length === 1 ? "triggered alert" : "triggered alerts"}
           </p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            Ostatni próg {formatMoney(latestAlert.targetPrice.amount)} ·{" "}
-            {latestAlert.triggeredAt ? formatDate(latestAlert.triggeredAt) : "teraz"}
+            Latest threshold {formatMoney(latestAlert.targetPrice.amount)} ·{" "}
+            {latestAlert.triggeredAt ? formatDate(latestAlert.triggeredAt) : "now"}
           </p>
         </div>
 
         <DialogTrigger className={buttonVariants({ variant: "outline", size: "xs" })}>
-          Podgląd
+          Preview
         </DialogTrigger>
       </div>
 
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Uruchomione alerty</DialogTitle>
-          <DialogDescription>
-            Pełna lista progów, które zostały wykryte dla tego produktu.
-          </DialogDescription>
+          <DialogTitle>Triggered alerts</DialogTitle>
+          <DialogDescription>Full list of thresholds detected for this product.</DialogDescription>
         </DialogHeader>
 
         <div className="grid max-h-[min(460px,calc(100svh-13rem))] gap-2 overflow-y-auto pr-1">
@@ -1078,7 +1079,7 @@ function TriggeredAlertsSummary({
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="inline-flex items-center gap-2 font-medium text-emerald-300">
-                  <Bell className="size-4" /> Alert uruchomiony
+                  <Bell className="size-4" /> Alert triggered
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{formatMoney(alert.targetPrice.amount)}</span>
@@ -1089,13 +1090,13 @@ function TriggeredAlertsSummary({
                     disabled={isDeletingAlert && deletingAlertId === alert.id}
                     onClick={() => onDeleteAlert(alert.id)}
                   >
-                    {isDeletingAlert && deletingAlertId === alert.id ? "Usuwanie..." : "Usuń"}
+                    {isDeletingAlert && deletingAlertId === alert.id ? "Deleting..." : "Delete"}
                   </Button>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Wykryto {alert.triggeredAt ? formatDate(alert.triggeredAt) : "teraz"}. Produkt
-                wymaga uwagi.
+                Detected {alert.triggeredAt ? formatDate(alert.triggeredAt) : "now"}. This product
+                needs attention.
               </p>
             </div>
           ))}

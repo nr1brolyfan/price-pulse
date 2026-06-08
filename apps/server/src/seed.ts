@@ -6,7 +6,7 @@ export const seedProducts: ReadonlyArray<Product> = [
   {
     id: "macbook-air-m3",
     name: "MacBook Air 13 M3",
-    category: "Laptopy",
+    category: "Laptops",
     imageUrl:
       "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=900&auto=format&fit=crop",
     currentPrice: { amount: 4999, currency: "PLN" },
@@ -92,7 +92,7 @@ export const seedProducts: ReadonlyArray<Product> = [
   {
     id: "iphone-15-pro",
     name: "iPhone 15 Pro 128 GB",
-    category: "Smartfony",
+    category: "Smartphones",
     imageUrl:
       "https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=900&auto=format&fit=crop",
     currentPrice: { amount: 4599, currency: "PLN" },
@@ -129,8 +129,8 @@ export const seedProducts: ReadonlyArray<Product> = [
   },
   {
     id: "lg-oled-c3-55",
-    name: "LG OLED C3 55 cali",
-    category: "Telewizory",
+    name: "LG OLED C3 55-inch",
+    category: "TVs",
     imageUrl:
       "https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=900&auto=format&fit=crop",
     currentPrice: { amount: 5299, currency: "PLN" },
@@ -189,14 +189,14 @@ export const seedEvents: ReadonlyArray<DomainEvent> = [
     id: "event-seed-1",
     type: "PriceDropped",
     productId: "macbook-air-m3",
-    message: "Cena MacBook Air 13 M3 spadła o 100 PLN.",
+    message: "Price for MacBook Air 13 M3 dropped by 100 PLN.",
     createdAt: "2026-06-08T09:00:00.000Z",
   },
   {
     id: "event-seed-2",
     type: "PriceChecked",
     productId: "sony-wh-1000xm5",
-    message: "Sprawdzono 2 oferty dla Sony WH-1000XM5.",
+    message: "Checked 2 offers for Sony WH-1000XM5.",
     createdAt: "2026-06-08T09:00:00.000Z",
   },
 ];

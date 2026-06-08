@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { apiClient } from "../lib/api-client";
 import { dashboardQueryOptions, invalidateDashboard } from "../lib/queries";
 
-const moneyFormatter = new Intl.NumberFormat("pl-PL", {
+const moneyFormatter = new Intl.NumberFormat("en-US", {
   currency: "PLN",
   maximumFractionDigits: 2,
   style: "currency",
@@ -27,7 +27,7 @@ const moneyFormatter = new Intl.NumberFormat("pl-PL", {
 const formatMoney = (amount: number) => moneyFormatter.format(amount);
 
 const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("pl-PL", {
+  new Intl.DateTimeFormat("en-US", {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
@@ -51,14 +51,14 @@ export default function Header() {
   const deleteAlertMutation = useMutation({
     mutationFn: apiClient.deleteAlert,
     onError: (error) => {
-      toast.error("Nie udało się usunąć alertu", {
+      toast.error("Failed to delete alert", {
         description: getErrorMessage(error),
       });
     },
     onSuccess: (alert) => {
       queryClient.invalidateQueries(invalidateDashboard);
-      toast.success("Alert usunięty", {
-        description: `Usunięto próg ${formatMoney(alert.targetPrice.amount)}.`,
+      toast.success("Alert deleted", {
+        description: `Removed threshold ${formatMoney(alert.targetPrice.amount)}.`,
       });
     },
   });
@@ -88,10 +88,10 @@ export default function Header() {
 
           <DashboardDialog
             count={alerts.length}
-            description="Reguły monitorowania, progi i ostatnie uruchomienia."
+            description="Monitoring rules, thresholds, and recent triggers."
             icon={<Bell className="size-4" />}
-            label="Alerty"
-            title="Alerty cenowe"
+            label="Alerts"
+            title="Price alerts"
           >
             <AlertsPreview
               alerts={alerts}
@@ -104,17 +104,17 @@ export default function Header() {
 
           <DashboardDialog
             count={events.length}
-            description="Ostatnie automatyczne zmiany cen, uruchomione alerty i działania systemu."
+            description="Recent automatic price changes, triggered alerts, and system activity."
             icon={<Activity className="size-4" />}
-            label="Zdarzenia"
-            title="Zdarzenia systemowe"
+            label="Events"
+            title="System events"
           >
             <EventsPreview events={events} />
           </DashboardDialog>
 
           {triggeredAlerts > 0 && (
             <span className="border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-emerald-300">
-              {triggeredAlerts} alertów uruchomionych
+              {triggeredAlerts} {triggeredAlerts === 1 ? "triggered alert" : "triggered alerts"}
             </span>
           )}
         </nav>
@@ -185,7 +185,7 @@ function AlertsPreview({
   });
 
   if (alerts.length === 0) {
-    return <EmptyPreview>Nie ma jeszcze żadnych reguł alertów.</EmptyPreview>;
+    return <EmptyPreview>No alert rules yet.</EmptyPreview>;
   }
 
   return (
@@ -194,26 +194,26 @@ function AlertsPreview({
         <AlertFilterButton
           active={filter === "all"}
           count={alerts.length}
-          label="Wszystkie"
+          label="All"
           onClick={() => setFilter("all")}
         />
         <AlertFilterButton
           active={filter === "active"}
           count={activeAlerts.length}
-          label="Aktywne"
+          label="Active"
           onClick={() => setFilter("active")}
         />
         <AlertFilterButton
           active={filter === "triggered"}
           count={triggeredAlerts.length}
-          label="Uruchomione"
+          label="Triggered"
           onClick={() => setFilter("triggered")}
         />
       </div>
 
       {filteredAlerts.length === 0 ? (
         <div className="min-h-0 overflow-y-auto">
-          <EmptyPreview>Brak alertów dla wybranego filtra.</EmptyPreview>
+          <EmptyPreview>No alerts for the selected filter.</EmptyPreview>
         </div>
       ) : (
         <div className="grid min-h-0 content-start gap-2 overflow-y-auto pr-1">
@@ -230,7 +230,7 @@ function AlertsPreview({
                 <div>
                   <p className="font-medium">{productName(alert.productId)}</p>
                   <p className="text-muted-foreground">
-                    Próg: {formatMoney(alert.targetPrice.amount)}
+                    Threshold: {formatMoney(alert.targetPrice.amount)}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -241,7 +241,7 @@ function AlertsPreview({
                         : "bg-background/60 text-muted-foreground"
                     }`}
                   >
-                    {alert.triggeredAt ? "ALERT" : "Aktywny"}
+                    {alert.triggeredAt ? "ALERT" : "Active"}
                   </span>
                   <Button
                     type="button"
@@ -250,7 +250,7 @@ function AlertsPreview({
                     disabled={isDeleting && deletingAlertId === alert.id}
                     onClick={() => onDeleteAlert(alert.id)}
                   >
-                    {isDeleting && deletingAlertId === alert.id ? "Usuwanie..." : "Usuń"}
+                    {isDeleting && deletingAlertId === alert.id ? "Deleting..." : "Delete"}
                   </Button>
                 </div>
               </div>
@@ -260,8 +260,8 @@ function AlertsPreview({
                 }
               >
                 {alert.triggeredAt
-                  ? `Uruchomiony ${formatDate(alert.triggeredAt)}`
-                  : "Czeka na próg"}
+                  ? `Triggered ${formatDate(alert.triggeredAt)}`
+                  : "Waiting for threshold"}
               </p>
             </div>
           ))}
@@ -294,7 +294,7 @@ function AlertFilterButton({
 
 function EventsPreview({ events }: { readonly events: ReadonlyArray<DomainEvent> }) {
   if (events.length === 0) {
-    return <EmptyPreview>Nie ma jeszcze zdarzeń systemowych.</EmptyPreview>;
+    return <EmptyPreview>No system events yet.</EmptyPreview>;
   }
 
   return (

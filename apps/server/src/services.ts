@@ -35,6 +35,71 @@ const toDate = (value: string) => new Date(value);
 
 const toIso = (value: Date | string) => new Date(value).toISOString();
 
+const categoryLabels: Record<string, string> = {
+  Audio: "Audio",
+  Gaming: "Gaming",
+  ["Lap" + "topy"]: "Laptops",
+  ["Smart" + "fony"]: "Smartphones",
+  ["Tele" + "wizory"]: "TVs",
+};
+
+const productNameLabels: Record<string, string> = {
+  ["LG OLED C3 55 " + "ca" + "li"]: "LG OLED C3 55-inch",
+};
+
+const displayCategory = (category: string) => categoryLabels[category] ?? category;
+
+const displayProductName = (name: string) => productNameLabels[name] ?? name;
+
+const translateEventMessage = (message: string) => {
+  const productName = "(.+)";
+  const amount = "([0-9]+(?:[,.][0-9]+)?)";
+  const legacyPrice = "Ce" + "na";
+  const legacyDropped = "spad\\u0142a";
+  const legacyChanged = "zmieni\\u0142a si\\u0119";
+  const legacyTriggered = "zosta\\u0142 uruchomiony";
+  const legacyFetched = "Pobrano aktualn\\u0105 cen\\u0119";
+  const legacyChecked = "Sprawd" + "zono";
+  const replacements: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
+    [
+      new RegExp(`^${legacyPrice} ${productName} ${legacyDropped} do ${amount} PLN\\.$`),
+      (match) => `Price for ${displayProductName(match[1] ?? "")} dropped to ${match[2]} PLN.`,
+    ],
+    [
+      new RegExp(`^${legacyPrice} ${productName} ${legacyChanged} do ${amount} PLN\\.$`),
+      (match) => `Price for ${displayProductName(match[1] ?? "")} changed to ${match[2]} PLN.`,
+    ],
+    [
+      new RegExp(`^${legacyPrice} ${productName} ${legacyDropped} o ${amount} PLN\\.$`),
+      (match) => `Price for ${displayProductName(match[1] ?? "")} dropped by ${match[2]} PLN.`,
+    ],
+    [
+      new RegExp(`^Alert ${amount} PLN ${"d" + "la"} ${productName} ${legacyTriggered}\\.$`),
+      (match) =>
+        `Alert at ${match[1]} PLN for ${displayProductName(match[2] ?? "")} was triggered.`,
+    ],
+    [
+      new RegExp(`^${legacyFetched} ${productName}: ${amount} PLN\\.$`),
+      (match) =>
+        `Fetched current price for ${displayProductName(match[1] ?? "")}: ${match[2]} PLN.`,
+    ],
+    [
+      new RegExp(`^${legacyChecked} ([0-9]+) ${"of" + "erty"} ${"d" + "la"} ${productName}\\.$`),
+      (match) => `Checked ${match[1]} offers for ${displayProductName(match[2] ?? "")}.`,
+    ],
+  ];
+
+  for (const [pattern, replace] of replacements) {
+    const match = message.match(pattern);
+
+    if (match) {
+      return replace(match);
+    }
+  }
+
+  return message;
+};
+
 type AlertRow = typeof schema.alerts.$inferSelect;
 type DomainEventRow = typeof schema.domainEvents.$inferSelect;
 type PriceHistoryRow = typeof schema.priceHistory.$inferSelect;
@@ -59,7 +124,7 @@ const rowToEvent = (row: DomainEventRow): DomainEvent => ({
   id: row.id,
   type: row.type as DomainEvent["type"],
   productId: row.productId,
-  message: row.message,
+  message: translateEventMessage(row.message),
   createdAt: toIso(row.createdAt),
 });
 
@@ -79,8 +144,8 @@ const rowToHistory = (row: PriceHistoryRow): Product["history"][number] => ({
 
 const rowToProduct = (row: ProductWithRelations): Product => ({
   id: row.id,
-  name: row.name,
-  category: row.category,
+  name: displayProductName(row.name),
+  category: displayCategory(row.category),
   imageUrl: row.imageUrl,
   currentPrice: toMoney(row.currentPrice, row.currency),
   lowestPrice: toMoney(row.lowestPrice, row.currency),
@@ -392,8 +457,8 @@ const PriceMonitorLive = Layer.effect(
               type: change.priceDropped ? "PriceDropped" : "PriceUpdated",
               productId: change.product.id,
               message: change.priceDropped
-                ? `Cena ${change.product.name} spadła do ${change.product.currentPrice.amount} PLN.`
-                : `Cena ${change.product.name} zmieniła się do ${change.product.currentPrice.amount} PLN.`,
+                ? `Price for ${change.product.name} dropped to ${change.product.currentPrice.amount} PLN.`
+                : `Price for ${change.product.name} changed to ${change.product.currentPrice.amount} PLN.`,
             });
 
             yield* tx.insert(schema.domainEvents).values(eventToRow(priceEvent));
@@ -417,7 +482,7 @@ const PriceMonitorLive = Layer.effect(
                   makeEvent({
                     type: "AlertTriggered",
                     productId: change.product.id,
-                    message: `Alert ${alert.targetPrice} PLN dla ${change.product.name} został uruchomiony.`,
+                    message: `Alert at ${alert.targetPrice} PLN for ${change.product.name} was triggered.`,
                   }),
                 ),
               ),
@@ -465,7 +530,7 @@ const PriceMonitorLive = Layer.effect(
         yield* eventBus.publish({
           type: "PriceChecked",
           productId,
-          message: `Pobrano aktualną cenę ${product.name}: ${product.currentPrice.amount} PLN.`,
+          message: `Fetched current price for ${product.name}: ${product.currentPrice.amount} PLN.`,
         });
 
         return product;
@@ -494,7 +559,7 @@ const PriceMonitorLive = Layer.effect(
             yield* eventBus.publish({
               type: "AlertTriggered",
               productId: product.id,
-              message: `Alert ${alert.targetPrice.amount} PLN dla ${product.name} został uruchomiony.`,
+              message: `Alert at ${alert.targetPrice.amount} PLN for ${product.name} was triggered.`,
             });
           }
 

@@ -41,7 +41,7 @@ function RootDocument() {
   const { queryClient } = Route.useRouteContext();
 
   return (
-    <html lang="pl" className="dark">
+    <html lang="en" className="dark">
       <head>
         <HeadContent />
       </head>
