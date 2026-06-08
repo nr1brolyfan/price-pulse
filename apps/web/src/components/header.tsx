@@ -70,7 +70,6 @@ export default function Header() {
           <p className="font-mono text-xs uppercase tracking-[0.35em] text-muted-foreground">
             PricePulse
           </p>
-          <h1 className="text-lg font-semibold">Monitoring cen i alerty</h1>
         </div>
 
         <nav className="flex flex-wrap items-center gap-2 text-sm">
