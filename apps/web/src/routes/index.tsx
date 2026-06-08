@@ -93,6 +93,7 @@ function HomeComponent() {
     () => new Set(),
   );
   const [latestAlert, setLatestAlert] = useState<AlertNotification | undefined>(undefined);
+  const [productSearch, setProductSearch] = useState("");
   const queryClient = useQueryClient();
   const dashboardQuery = useQuery({
     ...dashboardQueryOptions(),
@@ -312,7 +313,18 @@ function HomeComponent() {
   }
 
   const dashboard = dashboardQuery.data;
-  const allProductsExpanded = dashboard.products.every((product) =>
+  const normalizedProductSearch = productSearch.trim().toLocaleLowerCase("pl-PL");
+  const visibleProducts = normalizedProductSearch
+    ? dashboard.products.filter((product) =>
+        `${product.name} ${product.category}`
+          .toLocaleLowerCase("pl-PL")
+          .includes(normalizedProductSearch),
+      )
+    : dashboard.products;
+  const allProductsExpanded =
+    visibleProducts.length > 0 &&
+    visibleProducts.every((product) => expandedProductIds.has(product.id));
+  const visibleExpandedProductIds = visibleProducts.filter((product) =>
     expandedProductIds.has(product.id),
   );
 
@@ -339,7 +351,7 @@ function HomeComponent() {
       )}
 
       <section className="grid min-w-0 gap-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 border bg-muted/10 px-4 py-3">
+        <div className="grid gap-3 border bg-muted/10 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div>
             <h3 className="font-medium">Produkty</h3>
             <p className="text-xs text-muted-foreground">
@@ -347,28 +359,54 @@ function HomeComponent() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Input
+              className="w-56"
+              placeholder="Szukaj produktu..."
+              type="search"
+              value={productSearch}
+              onChange={(event) => setProductSearch(event.currentTarget.value)}
+            />
             <Button
               type="button"
               variant="outline"
               disabled={allProductsExpanded}
               onClick={() =>
-                setExpandedProductIds(new Set(dashboard.products.map((product) => product.id)))
+                setExpandedProductIds(
+                  (current) =>
+                    new Set([...current, ...visibleProducts.map((product) => product.id)]),
+                )
               }
             >
-              Rozwiń wszystkie
+              Rozwiń widoczne
             </Button>
             <Button
               type="button"
               variant="outline"
-              disabled={expandedProductIds.size === 0}
-              onClick={() => setExpandedProductIds(new Set())}
+              disabled={visibleExpandedProductIds.length === 0}
+              onClick={() =>
+                setExpandedProductIds((current) => {
+                  const next = new Set(current);
+
+                  for (const product of visibleProducts) {
+                    next.delete(product.id);
+                  }
+
+                  return next;
+                })
+              }
             >
-              Zwiń wszystkie
+              Zwiń widoczne
             </Button>
           </div>
         </div>
 
-        {dashboard.products.map((product) => (
+        {visibleProducts.length === 0 && (
+          <p className="border border-dashed bg-background/40 px-4 py-6 text-sm text-muted-foreground">
+            Brak produktów dla zapytania "{productSearch}".
+          </p>
+        )}
+
+        {visibleProducts.map((product) => (
           <ProductCard
             key={product.id}
             alerts={dashboard.alerts.filter((alert) => alert.productId === product.id)}
