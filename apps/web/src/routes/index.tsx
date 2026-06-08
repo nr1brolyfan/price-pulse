@@ -18,7 +18,7 @@ import { Input } from "@price-monitor/ui/components/input";
 import type { Alert, Dashboard, Product } from "@price-monitor/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Activity, Bell, Zap } from "lucide-react";
+import { Activity, Bell, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -89,6 +89,9 @@ function HomeComponent() {
   const [highlightedProductIds, setHighlightedProductIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [expandedProductIds, setExpandedProductIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [latestAlert, setLatestAlert] = useState<AlertNotification | undefined>(undefined);
   const queryClient = useQueryClient();
   const dashboardQuery = useQuery({
@@ -123,6 +126,7 @@ function HomeComponent() {
   });
 
   const showProduct = (productId: string) => {
+    setExpandedProductIds((current) => new Set([...current, productId]));
     document.getElementById(productCardId(productId))?.scrollIntoView({
       behavior: "smooth",
       block: "start",
@@ -280,6 +284,20 @@ function HomeComponent() {
     );
   };
 
+  const toggleProductDetails = (productId: string) => {
+    setExpandedProductIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+
+      return next;
+    });
+  };
+
   if (dashboardQuery.isPending) {
     return <DashboardShell />;
   }
@@ -294,6 +312,9 @@ function HomeComponent() {
   }
 
   const dashboard = dashboardQuery.data;
+  const allProductsExpanded = dashboard.products.every((product) =>
+    expandedProductIds.has(product.id),
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 lg:py-8">
@@ -318,11 +339,41 @@ function HomeComponent() {
       )}
 
       <section className="grid min-w-0 gap-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border bg-muted/10 px-4 py-3">
+          <div>
+            <h3 className="font-medium">Produkty</h3>
+            <p className="text-xs text-muted-foreground">
+              Szczegóły, wykresy i monitoring są ukryte do czasu rozwinięcia karty.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={allProductsExpanded}
+              onClick={() =>
+                setExpandedProductIds(new Set(dashboard.products.map((product) => product.id)))
+              }
+            >
+              Rozwiń wszystkie
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={expandedProductIds.size === 0}
+              onClick={() => setExpandedProductIds(new Set())}
+            >
+              Zwiń wszystkie
+            </Button>
+          </div>
+        </div>
+
         {dashboard.products.map((product) => (
           <ProductCard
             key={product.id}
             alerts={dashboard.alerts.filter((alert) => alert.productId === product.id)}
             deletingAlertId={deleteAlertMutation.variables}
+            isExpanded={expandedProductIds.has(product.id)}
             isAlerting={highlightedProductIds.has(product.id)}
             isCreatingAlert={
               createAlertMutation.isPending &&
@@ -332,6 +383,7 @@ function HomeComponent() {
             product={product}
             onCreateAlert={(event) => createAlert(event, product.id)}
             onDeleteAlert={(alertId) => deleteAlertMutation.mutate(alertId)}
+            onToggleDetails={() => toggleProductDetails(product.id)}
           />
         ))}
       </section>
@@ -473,8 +525,10 @@ function ProductCard({
   isAlerting,
   isCreatingAlert,
   isDeletingAlert,
+  isExpanded,
   onCreateAlert,
   onDeleteAlert,
+  onToggleDetails,
   product,
 }: {
   readonly alerts: ReadonlyArray<Alert>;
@@ -482,8 +536,10 @@ function ProductCard({
   readonly isAlerting: boolean;
   readonly isCreatingAlert: boolean;
   readonly isDeletingAlert: boolean;
+  readonly isExpanded: boolean;
   readonly onCreateAlert: (event: FormEvent<HTMLFormElement>) => void;
   readonly onDeleteAlert: (alertId: string) => void;
+  readonly onToggleDetails: () => void;
   readonly product: Product;
 }) {
   const firstPrice = product.history[0]?.amount ?? product.currentPrice.amount;
@@ -555,35 +611,43 @@ function ProductCard({
             {drop > 0 && (
               <p className="mt-1 text-xs text-emerald-500">Spadek od startu: {formatMoney(drop)}</p>
             )}
+            <Button type="button" variant="outline" onClick={onToggleDetails}>
+              {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+              {isExpanded ? "Zwiń szczegóły" : "Rozwiń szczegóły"}
+            </Button>
           </div>
         </header>
 
-        {isAlerting && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
-            <span className="inline-flex items-center gap-2 font-medium">
-              <Bell className="size-4 animate-pulse" /> Alert dla tego produktu właśnie odpalił
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-wider text-emerald-300">
-              live update
-            </span>
+        {isExpanded && (
+          <div className="grid min-w-0 gap-5">
+            {isAlerting && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
+                <span className="inline-flex items-center gap-2 font-medium">
+                  <Bell className="size-4 animate-pulse" /> Alert dla tego produktu właśnie odpalił
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-emerald-300">
+                  live update
+                </span>
+              </div>
+            )}
+
+            <PriceChart product={product} />
+
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+              <OffersPanel product={product} />
+              <MonitoringPanel
+                activeAlerts={activeAlerts}
+                deletingAlertId={deletingAlertId}
+                defaultAlertAmount={defaultAlertAmount}
+                isCreatingAlert={isCreatingAlert}
+                isDeletingAlert={isDeletingAlert}
+                onCreateAlert={onCreateAlert}
+                onDeleteAlert={onDeleteAlert}
+                triggeredAlerts={triggeredAlerts}
+              />
+            </div>
           </div>
         )}
-
-        <PriceChart product={product} />
-
-        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-          <OffersPanel product={product} />
-          <MonitoringPanel
-            activeAlerts={activeAlerts}
-            deletingAlertId={deletingAlertId}
-            defaultAlertAmount={defaultAlertAmount}
-            isCreatingAlert={isCreatingAlert}
-            isDeletingAlert={isDeletingAlert}
-            onCreateAlert={onCreateAlert}
-            onDeleteAlert={onDeleteAlert}
-            triggeredAlerts={triggeredAlerts}
-          />
-        </div>
       </div>
     </Card>
   );
