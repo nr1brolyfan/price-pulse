@@ -8,7 +8,9 @@ Full project documentation in Polish is available in [`docs/DOKUMENTACJA.md`](./
 
 ## Preview
 
-![PricePulse product dashboard](./docs/image-2.png)
+![PricePulse dashboard](./docs/image.png)
+
+![PricePulse product details](./docs/image-2.png)
 
 ## Features
 
